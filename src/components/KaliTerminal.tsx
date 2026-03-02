@@ -74,8 +74,8 @@ const BANNER: TermLine[] = [
     { text: '  ██████╔╝██║  ██║██║  ██║██║  ██╗██║ ╚═╝ ██║██║  ██║   ██║      ██║   ███████╗██║  ██║', type: 'banner' },
     { text: '  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝', type: 'banner' },
     { text: '', type: 'banner' },
-    { text: '  Darkmatter Security Terminal v2.4.0 — Kali Linux 2026.1', type: 'info' },
-    { text: '  Type "help" for available commands.', type: 'info' },
+    { text: '  Darkmatter Autonomous Security Scanner v3.0 — Kali Linux 2026.1', type: 'info' },
+    { text: '  Type "help" for commands. Type "scan <target>" to start an AI pentest.', type: 'info' },
     { text: '', type: 'output' },
 ];
 
@@ -87,8 +87,10 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
     const [cwd, setCwd] = useState('/home/darkmatter');
     const [history, setHistory] = useState<string[]>([]);
     const [histIdx, setHistIdx] = useState(-1);
+    const [scanRunning, setScanRunning] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const eventSourceRef = useRef<EventSource | null>(null);
 
     useEffect(() => {
         scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
@@ -100,6 +102,181 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
 
     const addLines = useCallback((newLines: TermLine[]) => {
         setLines(prev => [...prev, ...newLines]);
+    }, []);
+
+    const addLine = useCallback((text: string, type: TermLine['type'] = 'output') => {
+        setLines(prev => [...prev, { text, type }]);
+    }, []);
+
+    // ── Agent command generators (matches gemini.ts) ────────────
+
+    const getAgentCommands = useCallback((target: string, profile: string) => {
+        const domain = target.replace(/https?:\/\//, '').split('/')[0].split('?')[0];
+        const nmapFlags = profile === 'stealth' ? '-sS -T2' : profile === 'quick' ? '-F -T4' : '-sV -sC -p- -T4 -A';
+        const wordlist = profile === 'quick'
+            ? '/usr/share/wordlists/dirb/common.txt'
+            : '/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt';
+
+        return [
+            { name: 'Nmap Agent', cmd: `nmap ${nmapFlags} --script=vuln,default,http-enum ${domain}` },
+            { name: 'Dirb Agent', cmd: `gobuster dir -u ${target} -w ${wordlist} -x php,html,js,json,txt,bak,env,config -t 50 -k` },
+            { name: 'Nikto Agent', cmd: `nikto -h ${target} -ssl -Tuning 123456789abc -maxtime 300s && whatweb -a 3 ${target}` },
+            { name: 'SQLMap Agent', cmd: `sqlmap -u "${target}/?id=1" --dbs --level=5 --risk=3 --batch --forms --random-agent && python3 XSStrike/xsstrike.py -u "${target}"` },
+            { name: 'Metasploit Agent', cmd: `msfconsole -q -x "use auxiliary/scanner/http/http_login; set RHOSTS ${domain}; run" && hydra -L users.txt -P pass.txt ${domain} http-post-form "/login:u=^USER^&p=^PASS^:F=fail"` },
+            { name: 'SSL Agent', cmd: `testssl.sh --full --color 0 ${domain}:443 && sslscan --no-colour ${domain}` },
+            { name: 'OSINT Agent', cmd: `amass enum -passive -d ${domain} -o subdomains.txt && theHarvester -d ${domain} -b all -l 200` },
+            { name: 'Burp Agent', cmd: `curl -sI ${target} | head -40 && python3 cors_scanner.py -u ${target} && python3 ssrf_scanner.py -u ${target}` },
+        ];
+    }, []);
+
+    // ── Real scan via API + SSE streaming ──────────────────────
+
+    const runRealScan = useCallback(async (target: string, profile = 'full') => {
+        if (scanRunning) {
+            addLine('[!] A scan is already running. Wait for it to finish.', 'error');
+            return;
+        }
+        setScanRunning(true);
+
+        let url = target.trim();
+        if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+        const domain = url.replace(/https?:\/\//, '').split('/')[0].split('?')[0];
+
+        // ── Immediately show all agent commands (like server-side logs) ──
+        const cmds = getAgentCommands(url, profile);
+
+        addLines([
+            { text: '', type: 'output' },
+            { text: '════════════════════════════════════════════════════════════', type: 'banner' },
+            { text: `[Scan] Target: ${url}  |  Profile: ${profile}`, type: 'info' },
+            { text: '════════════════════════════════════════════════════════════', type: 'banner' },
+            { text: '', type: 'output' },
+        ]);
+
+        // Print every agent + its exact command
+        for (const agent of cmds) {
+            addLines([
+                { text: `[${agent.name}] ▶ Running:`, type: 'info' },
+                { text: `  $ ${agent.cmd}`, type: 'output' },
+                { text: '', type: 'output' },
+            ]);
+        }
+
+        addLine('[Batch] Sending 1 batched request for all 8 agents (free-tier safe)...', 'info');
+        addLine('[Batch] Waiting for Gemini response...', 'output');
+        addLine('', 'output');
+
+        // ── Fire the API call ──
+        try {
+            const res = await fetch('/api/scan/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target: url, profile }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                addLine(`[!] Scan failed to start: ${err.error || 'Unknown error'}`, 'error');
+                setScanRunning(false);
+                return;
+            }
+
+            const { scanId } = await res.json();
+
+            // ── Stream SSE results live ──
+            const es = new EventSource(`/api/scan/${scanId}/stream`);
+            eventSourceRef.current = es;
+
+            const agentFindingCounts: Record<string, number> = {};
+
+            es.addEventListener('finding', (e) => {
+                const f = JSON.parse(e.data);
+                const sev = f.severity?.toUpperCase() || 'INFO';
+                const cve = f.cve ? ` (${f.cve})` : '';
+                const agent = f.agent || 'Unknown';
+                agentFindingCounts[agent] = (agentFindingCounts[agent] || 0) + 1;
+
+                const type: TermLine['type'] = (sev === 'CRITICAL' || sev === 'HIGH') ? 'error'
+                    : sev === 'MEDIUM' ? 'info' : 'output';
+                addLine(`  [${sev}] ${f.title}${cve} — ${f.endpoint}`, type);
+            });
+
+            es.addEventListener('agent_report', (e) => {
+                const report = JSON.parse(e.data);
+                const count = agentFindingCounts[report.agentName] || report.findings?.length || 0;
+                addLine(`[${report.agentName}] ✓ ${count} findings parsed from batch`, 'success');
+            });
+
+            es.addEventListener('port', (e) => {
+                const p = JSON.parse(e.data);
+                const clr: TermLine['type'] = p.risk === 'high' ? 'error' : p.risk === 'medium' ? 'info' : 'success';
+                addLine(`  ${p.port}/${p.protocol}\t${p.state}\t${p.service}\t${p.version}`, clr);
+            });
+
+            es.addEventListener('directory', (e) => {
+                const d = JSON.parse(e.data);
+                const flag = d.interesting ? ' ⚠' : '';
+                addLine(`  ${d.path} (${d.status}) [${d.size}B]${flag}`, d.interesting ? 'info' : 'output');
+            });
+
+            es.addEventListener('complete', (e) => {
+                const data = JSON.parse(e.data);
+                es.close();
+                eventSourceRef.current = null;
+
+                const elapsed = data.completedAt
+                    ? ((data.completedAt - Date.now() + Date.now()) / 1000).toFixed(1)
+                    : '??';
+
+                addLines([
+                    { text: '', type: 'output' },
+                    { text: `[Batch] ✅ Complete — 1 API call, ${data.totalFindings} total findings`, type: 'success' },
+                    { text: `[Scan] Complete: ${data.totalFindings} findings, ${data.openPorts} ports, ${data.directories} directories`, type: 'success' },
+                    { text: '', type: 'output' },
+                    { text: '════════════════════════════════════════════════════════════', type: 'output' },
+                    { text: '  SCAN RESULTS', type: 'info' },
+                    { text: '════════════════════════════════════════════════════════════', type: 'output' },
+                    { text: `  Risk Score:     ${data.riskScore}/10`, type: (data.riskScore >= 7 ? 'error' : data.riskScore >= 4 ? 'info' : 'success') as TermLine['type'] },
+                    { text: `  Findings:       ${data.totalFindings}`, type: 'output' },
+                    { text: `  Open Ports:     ${data.openPorts}`, type: 'output' },
+                    { text: `  Directories:    ${data.directories}`, type: 'output' },
+                    { text: '════════════════════════════════════════════════════════════', type: 'output' },
+                    { text: '', type: 'output' },
+                    { text: `  [+] Dashboard report:  /dashboard`, type: 'success' },
+                    { text: `  [+] Scan ID:           ${scanId}`, type: 'success' },
+                    { text: '', type: 'output' },
+                    { text: `${domain}@kali:~$`, type: 'output' },
+                ]);
+
+                setScanRunning(false);
+            });
+
+            es.addEventListener('error', (e) => {
+                if ((e as MessageEvent).data) {
+                    const data = JSON.parse((e as MessageEvent).data);
+                    addLine(`[!] Error: ${data.message}`, 'error');
+                }
+                es.close();
+                eventSourceRef.current = null;
+                setScanRunning(false);
+            });
+
+            es.onerror = () => {
+                addLine('[!] Connection to scan engine lost', 'error');
+                es.close();
+                eventSourceRef.current = null;
+                setScanRunning(false);
+            };
+
+        } catch (err) {
+            addLine(`[!] ${err instanceof Error ? err.message : 'Network error'}`, 'error');
+            setScanRunning(false);
+        }
+    }, [scanRunning, addLine, addLines, getAgentCommands]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => { eventSourceRef.current?.close(); };
     }, []);
 
     const processCommand = (cmd: string) => {
@@ -134,12 +311,17 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                     { text: '  id                Display user identity', type: 'output' },
                     { text: '  uname -a          System information', type: 'output' },
                     { text: '  ifconfig          Network interfaces', type: 'output' },
-                    { text: '  nmap <target>     Port scan target', type: 'output' },
-                    { text: '  scan <target>     Run Darkmatter scan', type: 'output' },
-                    { text: '  sqlmap <url>      SQL injection test', type: 'output' },
-                    { text: '  hydra <target>    Brute force attack', type: 'output' },
-                    { text: '  hashcat <hash>    Hash cracking', type: 'output' },
-                    { text: '  msfconsole        Metasploit framework', type: 'output' },
+                    { text: '', type: 'output' },
+                    { text: '  ─── SCANNING ─────────────────────────────────', type: 'info' },
+                    { text: '  scan <target>     Run full 8-agent AI pentest (LIVE)', type: 'output' },
+                    { text: '  fuzz <target>     Alias for scan — full fuzzing run', type: 'output' },
+                    { text: '  nmap <target>     Port scan target (simulated)', type: 'output' },
+                    { text: '  sqlmap <url>      SQL injection test (simulated)', type: 'output' },
+                    { text: '  hydra <target>    Brute force attack (simulated)', type: 'output' },
+                    { text: '  hashcat <hash>    Hash cracking (simulated)', type: 'output' },
+                    { text: '  msfconsole        Metasploit framework (simulated)', type: 'output' },
+                    { text: '', type: 'output' },
+                    { text: '  ─── NETWORK ──────────────────────────────────', type: 'info' },
                     { text: '  netstat           Network statistics', type: 'output' },
                     { text: '  ping <host>       Ping a host', type: 'output' },
                     { text: '  curl <url>        HTTP request', type: 'output' },
@@ -288,40 +470,16 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                 break;
             }
 
-            case 'scan': {
-                const target = args[0] || 'https://api.targetapp.com';
-                output.push(
-                    { text: '', type: 'output' },
-                    { text: `[*] Darkmatter Scanner v2.4 initialized`, type: 'info' },
-                    { text: `[*] Target: ${target}`, type: 'info' },
-                    { text: `[*] Profile: full | Agents: 5 | Threads: 10`, type: 'info' },
-                    { text: '', type: 'output' },
-                    { text: '[▸] Running discovery agent...', type: 'output' },
-                    { text: '[▸] Running fuzzing agent...', type: 'output' },
-                    { text: '[▸] Running auth agent...', type: 'output' },
-                    { text: '[▸] Running config agent...', type: 'output' },
-                    { text: '[▸] Running code agent...', type: 'output' },
-                    { text: '', type: 'output' },
-                    { text: '[✓] Discovery — 47 endpoints found', type: 'success' },
-                    { text: '[✓] Fuzzing — 12 input vectors tested', type: 'success' },
-                    { text: '[✓] Auth — 3 privilege escalation paths found', type: 'success' },
-                    { text: '[!] CRITICAL: IDOR vulnerability on /api/v2/users/{id}', type: 'error' },
-                    { text: '[!] HIGH: SQL injection in /api/search?q=', type: 'error' },
-                    { text: '[!] HIGH: Missing rate limiting on /api/auth/login', type: 'error' },
-                    { text: '[!] HIGH: JWT secret weakness detected', type: 'error' },
-                    { text: '[✓] Config — 7 misconfigurations detected', type: 'success' },
-                    { text: '[✓] Code — 4 hardcoded secrets found', type: 'success' },
-                    { text: '', type: 'output' },
-                    { text: '═══════════════════════════════════════════════════', type: 'output' },
-                    { text: '  SCAN RESULTS', type: 'info' },
-                    { text: '═══════════════════════════════════════════════════', type: 'output' },
-                    { text: '  Critical:  1  │  High:  3  │  Medium:  7  │  Low:  12', type: 'output' },
-                    { text: '  Total findings: 23  │  Scan time: 4.82s', type: 'output' },
-                    { text: '═══════════════════════════════════════════════════', type: 'output' },
-                    { text: '  [+] Report saved to /home/darkmatter/reports/', type: 'success' },
-                    { text: '', type: 'output' },
-                );
-                break;
+            case 'scan': case 'fuzz': {
+                const target = args[0];
+                if (!target) {
+                    output.push({ text: `Usage: ${command} <target_url>`, type: 'error' });
+                    output.push({ text: `  Example: ${command} https://example.com`, type: 'output' });
+                    break;
+                }
+                addLines(output);
+                runRealScan(target, args[1] || 'full');
+                return;
             }
 
             case 'sqlmap': {
@@ -556,8 +714,8 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                 <span className="mx-3">|</span>
                 <span>{cwd}</span>
                 <span className="mx-3">|</span>
-                <span className="text-[#4af626]">●</span>
-                <span className="ml-1">connected</span>
+                <span className={scanRunning ? "text-[#ff6b6b] animate-pulse" : "text-[#4af626]"}>●</span>
+                <span className="ml-1">{scanRunning ? 'scanning...' : 'connected'}</span>
                 <div className="flex-1" />
                 <span>UTF-8</span>
                 <span className="mx-3">|</span>

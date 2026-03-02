@@ -109,6 +109,21 @@ export const AGENT_CONFIG: Record<string, { toolName: string; icon: string; desc
         icon: '⚡',
         description: 'Auth & exploit framework',
     },
+    'SSL Agent': {
+        toolName: 'testssl + SSLScan',
+        icon: '🔒',
+        description: 'TLS/SSL cipher & certificate analysis',
+    },
+    'OSINT Agent': {
+        toolName: 'Amass + theHarvester',
+        icon: '🕵️',
+        description: 'DNS recon, subdomain enum & OSINT',
+    },
+    'Burp Agent': {
+        toolName: 'Burp Suite + CORS/Header',
+        icon: '🛡️',
+        description: 'CORS, SSRF, headers & API security',
+    },
 };
 
 const AGENT_ORDER = Object.keys(AGENT_CONFIG);
@@ -222,8 +237,8 @@ export function useScan() {
 
             addLog(`DARKMATTER AI Security Scanner initialized`, 'info');
             addLog(`Target: ${data.target}`, 'info');
-            addLog(`Profile: ${profile} | Tools: Nmap, Gobuster, Nikto, SQLMap, Metasploit`, 'info');
-            addLog(`Launching 5 specialized security agents...`, 'info');
+            addLog(`Profile: ${profile} | Tools: Nmap, Gobuster, Nikto, SQLMap, Metasploit, testssl, Amass, Burp Suite`, 'info');
+            addLog(`Launching 8 specialized security agents...`, 'info');
 
             startStreaming(data.scanId);
         } catch (err) {
