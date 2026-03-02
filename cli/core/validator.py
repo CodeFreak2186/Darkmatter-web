@@ -6,6 +6,7 @@ Re-tests detections, applies CVSS-style scoring, and filters noise.
 from __future__ import annotations
 import logging
 from dataclasses import dataclass
+from typing import Callable
 from core.detector import Detection
 from core.executor import RequestExecutor, FuzzRequest
 from core.classifier import AttackVector
@@ -39,9 +40,10 @@ REMEDIATION: dict[AttackVector, str] = {
 class Validator:
     """Validates detections and reduces false positives."""
 
-    def __init__(self, executor: RequestExecutor | None = None, retest_count: int = 2):
+    def __init__(self, executor: RequestExecutor | None = None, retest_count: int = 2, on_progress: Callable[[str], None] | None = None):
         self.executor = executor
         self.retest_count = retest_count
+        self.on_progress = on_progress or (lambda msg: None)
 
     def validate_all(self, detections: list[Detection]) -> list[Detection]:
         """Validate and enrich all detections."""
@@ -118,6 +120,7 @@ class Validator:
             return det
 
         confirmed = 0
+        self.on_progress(f"Retesting {det.category}: {det.evidence}")
         for _ in range(self.retest_count):
             req = FuzzRequest(
                 url=det.endpoint,
@@ -131,9 +134,11 @@ class Validator:
                 confirmed += 1
 
         if confirmed == self.retest_count:
+            self.on_progress(f"  [+] Confirmed reproducible: {det.vector.value}")
             det.confidence = min(1.0, det.confidence + 0.2)
             det.false_positive_risk = "low"
         elif confirmed == 0:
+            self.on_progress(f"  [-] Failed to reproduce: {det.vector.value} (Discarding as false positive)")
             det.confidence *= 0.3  # likely false positive
             det.false_positive_risk = "high"
 

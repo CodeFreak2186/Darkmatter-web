@@ -46,7 +46,10 @@ class FuzzEngine:
             scope=self.scope, auth=auth, proxy=proxy,
         )
         self.detector = DetectionEngine()
-        self.validator = Validator(executor=self.executor)
+        self.validator = Validator(
+            executor=self.executor,
+            on_progress=lambda msg: self.on_progress("validate", msg)
+        )
         self.reporter = Reporter()
 
         self.max_payloads_per_param = max_payloads_per_param
@@ -132,10 +135,14 @@ class FuzzEngine:
                 classified.attack_vectors,
                 max_per_vector=self.max_payloads_per_param,
             )
+            
+            self.on_progress("fuzz", f"    -> Targeting '{param_name}' ({classified.input_type.value}) with {len(payloads)} payloads")
 
             for payload in payloads:
                 if not self.scope.can_continue():
                     break
+
+                self.on_progress("fuzz", f"      [Injected] {payload.vector.value.upper()} ({payload.category}) -> {payload.value[:40]}")
 
                 # Build fuzzed request
                 fuzzed_params = dict(params)
@@ -157,6 +164,9 @@ class FuzzEngine:
                 new_detections = self.detector.analyze(
                     response, baseline, payload, param_name,
                 )
+                if new_detections:
+                    for det in new_detections:
+                        self.on_progress("fuzz", f"        [!] Possible hit: {det.severity.upper()} {det.vector.value} - {det.evidence}")
                 detections.extend(new_detections)
 
         return detections

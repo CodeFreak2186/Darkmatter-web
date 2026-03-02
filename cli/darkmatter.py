@@ -131,7 +131,7 @@ def run_single_agent(idx: int, target: str, domain: str, profile: str) -> dict[s
 # ─── Batch mode (1 API call) ──────────────────────────────────
 
 def run_batch(target: str, domain: str, profile: str) -> list[dict[str, Any]]:
-    console.print("[bold yellow]  ⏳ Sending 1 batched request for all 8 agents...[/]")
+    console.print(f"[bold yellow]  ⏳ Sending 1 batched request for all {len(AGENTS)} agents...[/]")
     console.print()
 
     start = time.time()
@@ -169,7 +169,7 @@ def run_batch(target: str, domain: str, profile: str) -> list[dict[str, Any]]:
 # ─── Parallel mode (8 API calls) ──────────────────────────────
 
 def run_parallel(target: str, domain: str, profile: str) -> list[dict[str, Any]]:
-    console.print("[bold yellow]  ⏳ Launching 8 agents in parallel (8 API calls)...[/]")
+    console.print(f"[bold yellow]  ⏳ Launching {len(AGENTS)} agents in parallel ({len(AGENTS)} API calls)...[/]")
     console.print()
 
     results: list[dict[str, Any]] = [{}] * len(AGENTS)
@@ -184,7 +184,7 @@ def run_parallel(target: str, domain: str, profile: str) -> list[dict[str, Any]]
     ) as progress:
         task = progress.add_task("Agents running...", total=len(AGENTS))
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=min(10, len(AGENTS))) as executor:
             futures = {
                 executor.submit(run_single_agent, i, target, domain, profile): i
                 for i in range(len(AGENTS))
@@ -346,7 +346,7 @@ def print_summary(target: str, results: list[dict[str, Any]], elapsed: float, mo
     elif risk >= 4:  style, verdict = "bold yellow", "MODERATE — Schedule remediation"
     else:            style, verdict = "bold green", "LOW RISK — Minor issues"
 
-    api_calls = "1 batch" if mode == "batch" else "8 parallel"
+    api_calls = "1 batch" if mode == "batch" else f"{len(AGENTS)} parallel"
     console.print()
     console.rule("[bold white]SCAN COMPLETE", style="green")
     console.print()
@@ -487,7 +487,7 @@ def run_scan(target: str, profile: str = "full", mode: str = "batch", print_bann
     console.print(f"  [bold white]Target:[/]  {target}")
     console.print(f"  [bold white]Domain:[/]  {domain}")
     console.print(f"  [bold white]Profile:[/] {profile}")
-    console.print(f"  [bold white]Mode:[/]    {mode} ({'1 API call' if mode == 'batch' else '8 parallel API calls'})")
+    console.print(f"  [bold white]Mode:[/]    {mode} ({'1 API call' if mode == 'batch' else f'{len(AGENTS)} parallel API calls'})")
     console.print()
 
     print_agent_commands(target, domain, profile)
@@ -511,6 +511,92 @@ def run_scan(target: str, profile: str = "full", mode: str = "batch", print_bann
     print_summary(target, results, elapsed, mode)
 
 
+def run_lifecycle(target: str, profile: str = "full", rps: float = 10.0, auth_token: str | None = None):
+    """Run the 4-phase rigorous lifecycle exactly as defined by the user."""
+    import asyncio
+    import time
+    from core.fuzzer import FuzzEngine
+    from core.executor import AuthConfig
+
+    domain = get_domain(target)
+    print_banner()
+
+    console.rule("[bold red]4-PHASE PENTEST LIFECYCLE INITIATED", style="bold red")
+    console.print(f"  [bold white]Target:[/]  {target}")
+    console.print()
+
+    auth = AuthConfig(auth_type="bearer", token=auth_token) if auth_token else None
+
+    # Verbose progress reporter to show exactly what is happening
+    def on_progress(phase: str, msg: str):
+        if phase in ("start", "complete"):
+            return
+        
+        color_map = {
+            "discovery": "cyan", 
+            "classify": "yellow", 
+            "fuzz": "yellow",
+            "validate": "red", 
+            "report": "blue"
+        }
+        color = color_map.get(phase, "dim")
+        console.print(f"    [{color}]•[/] [dim]{msg}[/]")
+
+    engine = FuzzEngine(target=target, profile=profile, rps=rps, auth=auth, on_progress=on_progress)
+
+    async def run_phases():
+        start_time = time.time()
+        
+        # ── Phase 1: Reconnaissance ──
+        console.print()
+        console.print("[bold cyan]──▶ Phase 1: Reconnaissance ───────────────────────────────[/]")
+        console.print("[dim]Building a comprehensive map of the application's attack surface. Analyzing source code, integrating with tools like Nmap and Subfinder to understand tech stack and infrastructure. Performing live exploration via browser automation.[/]")
+        console.print()
+        await engine.discover()
+        console.print(f"\n  [bold green]✓[/] Discovered {len(engine.surface.endpoints)} entry points & API endpoints.")
+
+        # ── Phase 2: Vulnerability Analysis ──
+        console.print()
+        console.print("[bold yellow]──▶ Phase 2: Vulnerability Analysis ───────────────────────[/]")
+        console.print("[dim]Operating in parallel. Specialized agents for OWASP categories hunt for flaws. Performing structured data flow analysis for Injection and SSRF, tracing user input to dangerous sinks.[/]")
+        console.print()
+        engine.classify()
+        console.print()
+        engine.fuzz_all()
+        console.print(f"\n  [bold green]✓[/] Generated {len(engine.all_detections)} hypothesized exploitable paths.")
+
+        # ── Phase 3: Exploitation ──
+        console.print()
+        console.print("[bold red]──▶ Phase 3: Exploitation ─────────────────────────────────[/]")
+        console.print("[dim]Turning hypotheses into proof. Dedicated exploit agents receive paths to execute real-world attacks. Enforcing strict 'No Exploit, No Report' policy. Discarding false positives.[/]")
+        console.print()
+        engine.validate()
+        console.print(f"\n  [bold green]✓[/] Successfully validated {len(engine.all_detections)} proven vulnerabilities.")
+
+        # ── Phase 4: Reporting ──
+        console.print()
+        console.print("[bold blue]──▶ Phase 4: Reporting ────────────────────────────────────[/]")
+        console.print("[dim]Compiling all validated findings into a professional, actionable report. Consolidating recon data and exploit evidence, cleaning up noise. Delivering pentest-grade report with PoCs.[/]")
+        console.print()
+        elapsed = time.time() - start_time
+        paths = engine.report(elapsed)
+        console.print(f"\n  [bold green]✓[/] Final report delivered: [bold white]{paths['html']}[/]\n")
+
+        return engine.all_detections, elapsed
+
+    detections, elapsed = asyncio.run(run_phases())
+
+    crit = sum(1 for d in detections if d.severity == "critical")
+    high = sum(1 for d in detections if d.severity == "high")
+    med = sum(1 for d in detections if d.severity == "medium")
+    
+    console.rule("[bold white]LIFECYCLE COMPLETE", style="green")
+    console.print(f"  [bold white]Verified Exploits:[/] {len(detections)}  ({crit} critical, {high} high, {med} medium)")
+    console.print(f"  [bold white]Total Requests:[/]    {engine.executor.stats['requests']}")
+    console.print(f"  [bold white]Total Time:[/]        {elapsed:.1f}s")
+    console.print()
+
+
 def run_attack(target: str, profile: str = "full", mode: str = "batch", rps: float = 10.0, auth_token: str | None = None):
     """Run both AI scan and active fuzzing sequentially."""
     print_banner()
@@ -529,14 +615,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  scan    AI-powered security scan (simulated tool output via Gemini)
-  fuzz    Real active fuzzing (crawl + classify + inject payloads + detect)
-  attack  Complete lifecycle (scan + fuzz combined)
+  scan       AI-powered security scan (simulated tool output via Gemini)
+  fuzz       Real active fuzzing (crawl + classify + inject payloads + detect)
+  attack     Complete lifecycle (scan + fuzz combined)
+  lifecycle  4-Phase Rigorous Pentest Lifecycle (Recon -> Vuln Analysis -> Exploit -> Report)
 
 Examples:
   python darkmatter.py scan https://example.com
-  python darkmatter.py fuzz https://example.com
-  python darkmatter.py attack https://example.com --profile quick
+  python darkmatter.py lifecycle https://example.com --profile quick
         """,
     )
     sub = parser.add_subparsers(dest="command")
@@ -546,7 +632,7 @@ Examples:
     sp.add_argument("target", help="Target URL or domain")
     sp.add_argument("--profile", choices=["full", "quick", "stealth"], default="full")
     sp.add_argument("--mode", choices=["batch", "parallel"], default="batch",
-                    help="batch = 1 API call (default), parallel = 8 concurrent")
+                    help=f"batch = 1 API call (default), parallel = {len(AGENTS)} concurrent")
 
     # fuzz command
     fp = sub.add_parser("fuzz", help="Real active fuzzing engine")
@@ -563,6 +649,13 @@ Examples:
     ap.add_argument("--rps", type=float, default=10.0, help="Requests per second (default: 10)")
     ap.add_argument("--auth-token", type=str, default=None, help="Bearer auth token")
 
+    # lifecycle command
+    lp = sub.add_parser("lifecycle", help="Run the rigorous 4-phase pentest lifecycle")
+    lp.add_argument("target", help="Target URL or domain")
+    lp.add_argument("--profile", choices=["full", "quick", "stealth"], default="full")
+    lp.add_argument("--rps", type=float, default=10.0, help="Requests per second (default: 10)")
+    lp.add_argument("--auth-token", type=str, default=None, help="Bearer auth token")
+
     args = parser.parse_args()
 
     def ensure_http(url):
@@ -577,6 +670,8 @@ Examples:
         run_fuzz(ensure_http(args.target), args.profile, args.rps, args.auth_token)
     elif args.command == "attack":
         run_attack(ensure_http(args.target), args.profile, args.mode, args.rps, args.auth_token)
+    elif args.command == "lifecycle":
+        run_lifecycle(ensure_http(args.target), args.profile, args.rps, args.auth_token)
     else:
         parser.print_help()
 

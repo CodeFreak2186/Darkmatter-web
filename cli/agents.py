@@ -31,129 +31,149 @@ AGENTS: list[AgentConfig] = [
             f"nmap {'-sS -T2' if p == 'stealth' else '-F -T4' if p == 'quick' else '-sV -sC -p- -T4 -A'} "
             f"--script=vuln,default,http-enum {d}"
         ),
-        build_prompt=lambda t, d, p: f"""You are an Nmap/Shodan security agent. Simulate a full port scan of {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of nmap output",
-  "ports": [{{"port":80,"protocol":"tcp","state":"open","service":"http","version":"nginx/1.24","risk":"low"}}],
-  "findings": [{{"severity":"high","title":"Vuln","endpoint":"22/tcp","description":"1 sentence","recommendation":"1 sentence","cvss":7.5,"tool":"Nmap/Shodan","cve":"CVE-XXXX-XXXXX"}}]
-}}
-Rules: 5-8 ports, 2-4 findings. severity=critical|high|medium|low|info. Keep ALL strings SHORT.""",
+        build_prompt=lambda t, d, p: f"""You are an Nmap/Shodan agent scanning {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines nmap output", "ports": [{{"port":80,"protocol":"tcp","state":"open","service":"http","version":"1.2","risk":"low"}}], "findings": [{{"severity":"high","title":"Vuln","endpoint":"22/tcp","description":"...","recommendation":"...","cvss":7.5,"tool":"Nmap"}}] }}"""
     ),
     AgentConfig(
         name="Dirb Agent",
         tool_name="Gobuster + Dirb",
         icon="📁",
         json_key="dirb",
-        build_command=lambda t, d, p: (
-            f"gobuster dir -u {t} -w "
-            f"{'/usr/share/wordlists/dirb/common.txt' if p == 'quick' else '/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt'} "
-            f"-x php,html,js,json,txt,bak,env,config -t 50 -k"
-        ),
-        build_prompt=lambda t, d, p: f"""You are a Gobuster/Dirb directory enumeration agent scanning {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of gobuster output",
-  "directories": [{{"path":"/admin","status":200,"size":4821,"type":"directory","interesting":true}}],
-  "findings": [{{"severity":"high","title":"Vuln","endpoint":"/admin","description":"1 sentence","recommendation":"1 sentence","cvss":8.1,"tool":"Gobuster"}}]
-}}
-Rules: 8-15 directories, 3-4 findings.""",
+        build_command=lambda t, d, p: f"gobuster dir -u {t} -w /usr/share/wordlists/dirb/common.txt -x php,js,bak,env -t 50 -k",
+        build_prompt=lambda t, d, p: f"""You are a Gobuster agent scanning {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines gobuster", "directories": [{{"path":"/admin","status":200,"size":4821,"type":"directory","interesting":true}}], "findings": [{{"severity":"medium","title":"Vuln","endpoint":"/admin","description":"...","recommendation":"...","cvss":5.0,"tool":"Gobuster"}}] }}"""
     ),
     AgentConfig(
         name="Nikto Agent",
         tool_name="Nikto + WhatWeb",
         icon="🌐",
         json_key="nikto",
-        build_command=lambda t, d, p: f"nikto -h {t} -ssl -Tuning 123456789abc -maxtime 300s && whatweb -a 3 {t}",
-        build_prompt=lambda t, d, p: f"""You are a Nikto/WhatWeb scanner scanning {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of Nikto output with OSVDB IDs",
-  "findings": [{{"severity":"medium","title":"Missing CSP","endpoint":"/","description":"1 sentence","recommendation":"1 sentence","cvss":5.3,"tool":"Nikto"}}]
-}}
-Rules: 3-5 findings about headers, tech disclosure.""",
+        build_command=lambda t, d, p: f"nikto -h {t} -ssl -Tuning 123456789abc && whatweb -a 3 {t}",
+        build_prompt=lambda t, d, p: f"""You are a Nikto scanner scanning {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines Nikto", "findings": [{{"severity":"medium","title":"Missing CSP","endpoint":"/","description":"...","recommendation":"...","cvss":5.3,"tool":"Nikto"}}] }}"""
     ),
     AgentConfig(
         name="SQLMap Agent",
         tool_name="SQLMap + XSStrike",
         icon="💉",
         json_key="sqlmap",
-        build_command=lambda t, d, p: (
-            f'sqlmap -u "{t}/?id=1" --dbs --level=5 --risk=3 --batch --forms --random-agent '
-            f'&& python3 XSStrike/xsstrike.py -u "{t}"'
-        ),
-        build_prompt=lambda t, d, p: f"""You are a SQLMap/XSStrike injection agent scanning {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of sqlmap output",
-  "findings": [{{"severity":"critical","title":"SQL Injection","endpoint":"/?id=1","description":"1 sentence with payload","recommendation":"1 sentence","cvss":9.8,"tool":"SQLMap","cve":"CVE-XXXX-XXXXX"}}]
-}}
-Rules: 2-4 findings covering SQLi, XSS, SSTI.""",
+        build_command=lambda t, d, p: f'sqlmap -u "{t}/?id=1" --dbs --level=5 --batch && python3 xsstrike.py -u "{t}"',
+        build_prompt=lambda t, d, p: f"""You are a SQLMap injection agent scanning {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines sqlmap", "findings": [{{"severity":"critical","title":"SQLi","endpoint":"/?id=1","description":"...","recommendation":"...","cvss":9.8,"tool":"SQLMap"}}] }}"""
     ),
     AgentConfig(
         name="Metasploit Agent",
         tool_name="Metasploit + Hydra",
         icon="⚡",
         json_key="metasploit",
-        build_command=lambda t, d, p: (
-            f'msfconsole -q -x "use auxiliary/scanner/http/http_login; set RHOSTS {d}; run" '
-            f'&& hydra -L users.txt -P pass.txt {d} http-post-form "/login:u=^USER^&p=^PASS^:F=fail"'
-        ),
-        build_prompt=lambda t, d, p: f"""You are a Metasploit/Hydra exploit agent targeting {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of msf6 output",
-  "findings": [{{"severity":"critical","title":"Default Creds","endpoint":"/admin/login","description":"1 sentence","recommendation":"1 sentence","cvss":9.8,"tool":"Metasploit/Hydra"}}]
-}}
-Rules: 2-4 findings about default creds, JWT, sessions.""",
+        build_command=lambda t, d, p: f'msfconsole -q -x "use auxiliary/scanner/http/http_login..." && hydra -L users.txt {d} http-post-form',
+        build_prompt=lambda t, d, p: f"""You are a Metasploit agent targeting {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines msf6", "findings": [{{"severity":"critical","title":"Default Creds","endpoint":"/admin","description":"...","recommendation":"...","cvss":9.8,"tool":"Metasploit"}}] }}"""
     ),
     AgentConfig(
         name="SSL Agent",
         tool_name="testssl + SSLScan",
         icon="🔒",
         json_key="ssl",
-        build_command=lambda t, d, p: f"testssl.sh --full --color 0 {d}:443 && sslscan --no-colour {d}",
-        build_prompt=lambda t, d, p: f"""You are a testssl/SSLScan TLS agent scanning {d}:443 ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of testssl.sh output",
-  "findings": [{{"severity":"high","title":"TLS 1.0","endpoint":":443","description":"1 sentence","recommendation":"1 sentence","cvss":7.4,"tool":"testssl/SSLScan","cve":"CVE-2014-3566"}}]
-}}
-Rules: 2-4 findings about weak TLS, HSTS, cert, ciphers.""",
+        build_command=lambda t, d, p: f"testssl.sh --color 0 {d}:443 && sslscan {d}",
+        build_prompt=lambda t, d, p: f"""You are an SSL agent scanning {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines testssl", "findings": [{{"severity":"high","title":"TLS 1.0","endpoint":":443","description":"...","recommendation":"...","cvss":7.4,"tool":"testssl"}}] }}"""
     ),
     AgentConfig(
         name="OSINT Agent",
         tool_name="Amass + theHarvester",
         icon="🕵️",
         json_key="osint",
-        build_command=lambda t, d, p: f"amass enum -passive -d {d} -o subdomains.txt && theHarvester -d {d} -b all -l 200",
-        build_prompt=lambda t, d, p: f"""You are an Amass/theHarvester OSINT agent scanning {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of amass + theHarvester output",
-  "findings": [{{"severity":"high","title":"Dev Subdomain","endpoint":"dev.{d}","description":"1 sentence","recommendation":"1 sentence","cvss":7.5,"tool":"Amass"}}]
-}}
-Rules: 2-4 findings about subdomains, DNS, emails.""",
+        build_command=lambda t, d, p: f"amass enum -passive -d {d} && theHarvester -d {d} -b all",
+        build_prompt=lambda t, d, p: f"""You are an OSINT agent scanning {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines amass", "findings": [{{"severity":"high","title":"Dev Subdomain","endpoint":"dev.{d}","description":"...","recommendation":"...","cvss":7.5,"tool":"Amass"}}] }}"""
     ),
     AgentConfig(
         name="Burp Agent",
-        tool_name="Burp Suite + CORS/Header",
+        tool_name="Burp Suite + CORS",
         icon="🛡️",
         json_key="burp",
-        build_command=lambda t, d, p: f"curl -sI {t} | head -40 && python3 cors_scanner.py -u {t} && python3 ssrf_scanner.py -u {t}",
-        build_prompt=lambda t, d, p: f"""You are a Burp Suite scanner analyzing headers, CORS, SSRF for {d} ({t}).
-Return ONLY valid JSON, no markdown:
-{{
-  "toolOutput": "5-8 lines of HTTP headers + CORS/SSRF scan",
-  "findings": [{{"severity":"high","title":"CORS Wildcard","endpoint":"/api/","description":"1 sentence","recommendation":"1 sentence","cvss":8.1,"tool":"Burp/CORS Scanner"}}]
-}}
-Rules: 2-4 findings about CORS, SSRF, redirects, headers.""",
+        build_command=lambda t, d, p: f"python3 cors_scanner.py -u {t} && python3 ssrf_scanner.py -u {t}",
+        build_prompt=lambda t, d, p: f"""You are a Burp proxy scanning headers for {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines CORS scan", "findings": [{{"severity":"high","title":"CORS Wildcard","endpoint":"/api","description":"...","recommendation":"...","cvss":8.1,"tool":"Burp"}}] }}"""
     ),
+    AgentConfig(
+        name="Cloud Agent",
+        tool_name="ScoutSuite + Pacu",
+        icon="☁️",
+        json_key="cloud",
+        build_command=lambda t, d, p: f"scout aws --no-browser && pacu --session {d} --run-all",
+        build_prompt=lambda t, d, p: f"""You are a Cloud Security agent scanning AWS/GCP config for {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines ScoutSuite", "findings": [{{"severity":"high","title":"S3 Bucket Public","endpoint":"s3://bucket","description":"...","recommendation":"...","cvss":7.5,"tool":"ScoutSuite"}}] }}"""
+    ),
+    AgentConfig(
+        name="Container Agent",
+        tool_name="Trivy + Kube-hunter",
+        icon="🐳",
+        json_key="container",
+        build_command=lambda t, d, p: f"trivy image {d}:latest && kube-hunter --remote {d}",
+        build_prompt=lambda t, d, p: f"""You are a Container/K8s agent scanning deployments at {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines Trivy output", "findings": [{{"severity":"critical","title":"K8s Dashboard Exposed","endpoint":"/api/v1/namespaces/kubernetes-dashboard/","description":"...","recommendation":"...","cvss":9.0,"tool":"kube-hunter"}}] }}"""
+    ),
+    AgentConfig(
+        name="API Agent",
+        tool_name="Kiterunner + RESTler",
+        icon="🔌",
+        json_key="api",
+        build_command=lambda t, d, p: f"kr scan {t} -w routes-large.kite && restler --target {t}",
+        build_prompt=lambda t, d, p: f"""You are an API/GraphQL agent scanning {t}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines Kiterunner", "findings": [{{"severity":"high","title":"BOLA / IDOR","endpoint":"/api/v1/users/99","description":"...","recommendation":"...","cvss":8.5,"tool":"Kiterunner"}}] }}"""
+    ),
+    AgentConfig(
+        name="Secret Agent",
+        tool_name="Nuclei + TruffleHog",
+        icon="🔑",
+        json_key="secrets",
+        build_command=lambda t, d, p: f"nuclei -u {t} -t exposures/ && trufflehog --no-update {t}",
+        build_prompt=lambda t, d, p: f"""You are a Secret Scanner looking for leaked API keys on {t}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines Nuclei output", "findings": [{{"severity":"critical","title":"AWS Key Leak","endpoint":"/.env","description":"...","recommendation":"...","cvss":9.5,"tool":"Nuclei"}}] }}"""
+    ),
+    AgentConfig(
+        name="WAF Agent",
+        tool_name="WafW00f + WhatWaf",
+        icon="🧱",
+        json_key="waf",
+        build_command=lambda t, d, p: f"wafw00f {t} -a && whatwaf -u {t}",
+        build_prompt=lambda t, d, p: f"""You are a WAF fingerprinting agent analyzing {t}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines WafW00f", "findings": [{{"severity":"info","title":"Cloudflare WAF Detected","endpoint":"/","description":"...","recommendation":"...","cvss":0.0,"tool":"WafW00f"}}] }}"""
+    ),
+    AgentConfig(
+        name="AD Identity Agent",
+        tool_name="CrackMapExec + BloodHound",
+        icon="🎭",
+        json_key="ad",
+        build_command=lambda t, d, p: f"cme smb {d} -u '' -p '' && bloodhound-python -d {d} -u null -p null -c All",
+        build_prompt=lambda t, d, p: f"""You are an Active Directory/Identity agent enumerating {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines CrackMapExec", "findings": [{{"severity":"high","title":"SMB Null Session","endpoint":"139/tcp","description":"...","recommendation":"...","cvss":7.0,"tool":"CrackMapExec"}}] }}"""
+    ),
+    AgentConfig(
+        name="Takeover Agent",
+        tool_name="Subzy + Nuclei",
+        icon="🚩",
+        json_key="takeover",
+        build_command=lambda t, d, p: f"subzy run --targets subdomains.txt && nuclei -tags takeover -u {t}",
+        build_prompt=lambda t, d, p: f"""You are a Subdomain Takeover agent analyzing {d}. Return ONLY valid JSON:
+{{ "toolOutput": "5 lines Subzy output", "findings": [{{"severity":"high","title":"Subdomain Takeover","endpoint":"shop.{d}","description":"...","recommendation":"...","cvss":8.5,"tool":"Subzy"}}] }}"""
+    )
 ]
 
 
 def build_batch_prompt(target: str, domain: str, profile: str) -> str:
-    """Build a single prompt that asks for ALL 8 agents in one JSON response."""
+    """Build a single prompt that asks for ALL agents in one JSON response."""
+    
+    agent_blocks = []
+    for agent in AGENTS:
+        # We grab the example JSON output from their prompt wrapper
+        prompt_example = agent.build_prompt(target, domain, profile).split("Return ONLY valid JSON:")[1].strip()
+        agent_blocks.append(f"  \"{agent.json_key}\": {prompt_example}")
+        
+    json_structure = "{\n" + ",\n".join(agent_blocks) + "\n}"
+    
     return f"""You are an AI Red Team conducting a comprehensive penetration test. Be CONCISE.
 Target: {target}  |  Domain: {domain}  |  Profile: {profile}
 
@@ -161,44 +181,9 @@ CRITICAL RULES:
 - Respond ONLY with a single valid JSON object. No markdown fences, no extra text.
 - Keep EVERY toolOutput to 5 lines MAX. Short sentences.
 - Keep ALL description/recommendation fields to 1 sentence MAX.
-- The entire response must stay under 6000 tokens.
+- The entire response must stay under 10000 tokens.
 
 Return this JSON structure (fill in realistic values for {domain}):
-{{
-  "nmap": {{
-    "toolOutput": "5 lines nmap output",
-    "ports": [{{"port":80,"protocol":"tcp","state":"open","service":"http","version":"nginx/1.24","risk":"low"}}],
-    "findings": [{{"severity":"high","title":"SSH Exposed","endpoint":"22/tcp","description":"1 sentence","recommendation":"1 sentence","cvss":7.5,"tool":"Nmap","cve":"CVE-2023-38408"}}]
-  }},
-  "dirb": {{
-    "toolOutput": "5 lines gobuster output",
-    "directories": [{{"path":"/admin","status":200,"size":4821,"type":"directory","interesting":true}}],
-    "findings": [{{"severity":"critical","title":"Exposed .git","endpoint":"/.git","description":"1 sentence","recommendation":"1 sentence","cvss":9.1,"tool":"Gobuster"}}]
-  }},
-  "nikto": {{
-    "toolOutput": "5 lines nikto output",
-    "findings": [{{"severity":"medium","title":"Missing CSP","endpoint":"/","description":"1 sentence","recommendation":"1 sentence","cvss":5.3,"tool":"Nikto"}}]
-  }},
-  "sqlmap": {{
-    "toolOutput": "5 lines sqlmap output",
-    "findings": [{{"severity":"critical","title":"SQL Injection","endpoint":"/?id=1","description":"1 sentence","recommendation":"1 sentence","cvss":9.8,"tool":"SQLMap","cve":"CVE-2023-23752"}}]
-  }},
-  "metasploit": {{
-    "toolOutput": "5 lines msf6 output",
-    "findings": [{{"severity":"critical","title":"Default Creds","endpoint":"/admin","description":"1 sentence","recommendation":"1 sentence","cvss":9.8,"tool":"Hydra"}}]
-  }},
-  "ssl": {{
-    "toolOutput": "5 lines testssl output",
-    "findings": [{{"severity":"high","title":"Weak TLS","endpoint":":443","description":"1 sentence","recommendation":"1 sentence","cvss":7.4,"tool":"testssl","cve":"CVE-2014-3566"}}]
-  }},
-  "osint": {{
-    "toolOutput": "5 lines amass output",
-    "findings": [{{"severity":"high","title":"Dev Subdomain","endpoint":"dev.{domain}","description":"1 sentence","recommendation":"1 sentence","cvss":7.5,"tool":"Amass"}}]
-  }},
-  "burp": {{
-    "toolOutput": "5 lines header/CORS output",
-    "findings": [{{"severity":"high","title":"CORS Wildcard","endpoint":"/api/","description":"1 sentence","recommendation":"1 sentence","cvss":8.1,"tool":"Burp"}}]
-  }}
-}}
+{json_structure}
 
-Each agent should have 2-3 realistic findings for {domain}. Fill in realistic tool output. Keep total JSON compact."""
+Each agent should have 1-3 realistic findings for {domain}. Fill in realistic tool output. Keep total JSON compact."""
