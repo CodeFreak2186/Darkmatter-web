@@ -15,6 +15,8 @@ interface Finding {
     endpoint: string;
     description: string;
     agent: string;
+    remediation?: string;
+    cwe?: string;
 }
 
 interface AgentStep {
@@ -47,35 +49,7 @@ function GlassCard({ children, className = '', glow }: { children: React.ReactNo
     );
 }
 
-// ─── Fake scan data generator ────────────────────────────────
-function generateFindings(target: string): Finding[] {
-    const domain = target.replace(/https?:\/\//, '').split('/')[0];
-    return [
-        { id: 1, severity: 'critical', title: 'IDOR Vulnerability', endpoint: `/api/v2/users/{id}`, description: `Direct object reference allows unauthorized access to user data on ${domain}`, agent: 'Auth Agent' },
-        { id: 2, severity: 'high', title: 'SQL Injection', endpoint: `/api/search?q=`, description: 'Unsanitized input allows SQL injection in search parameter', agent: 'Fuzzing Agent' },
-        { id: 3, severity: 'high', title: 'Missing Rate Limiting', endpoint: `/api/auth/login`, description: 'No rate limiting on authentication endpoint enables brute force', agent: 'Auth Agent' },
-        { id: 4, severity: 'high', title: 'JWT Secret Weakness', endpoint: `/api/auth/token`, description: 'JWT tokens signed with weak HS256 key (< 256 bits)', agent: 'Config Agent' },
-        { id: 5, severity: 'medium', title: 'CORS Misconfiguration', endpoint: `/api/*`, description: 'Wildcard origin allowed in CORS headers', agent: 'Config Agent' },
-        { id: 6, severity: 'medium', title: 'Missing HSTS Header', endpoint: `/`, description: 'Strict-Transport-Security header not set', agent: 'Config Agent' },
-        { id: 7, severity: 'medium', title: 'Server Version Disclosure', endpoint: `/`, description: `Server header exposes Apache/2.4.54`, agent: 'Discovery Agent' },
-        { id: 8, severity: 'medium', title: 'Directory Listing Enabled', endpoint: `/assets/`, description: 'Directory listing exposes internal file structure', agent: 'Discovery Agent' },
-        { id: 9, severity: 'medium', title: 'Insecure Cookie Flags', endpoint: `/api/auth/session`, description: 'Session cookie missing Secure and HttpOnly flags', agent: 'Auth Agent' },
-        { id: 10, severity: 'medium', title: 'XSS via Reflected Input', endpoint: `/search`, description: 'Reflected XSS in search results page', agent: 'Fuzzing Agent' },
-        { id: 11, severity: 'medium', title: 'Open Redirect', endpoint: `/redirect?url=`, description: 'Unvalidated redirect allows phishing', agent: 'Fuzzing Agent' },
-        { id: 12, severity: 'low', title: 'Missing X-Frame-Options', endpoint: `/`, description: 'Page can be framed, potential clickjacking', agent: 'Config Agent' },
-        { id: 13, severity: 'low', title: 'Outdated TLS Cipher', endpoint: `/`, description: 'TLS 1.0 still supported on server', agent: 'Config Agent' },
-        { id: 14, severity: 'low', title: 'Verbose Error Messages', endpoint: `/api/v2/error`, description: 'Stack traces exposed in error responses', agent: 'Code Agent' },
-        { id: 15, severity: 'low', title: 'Hardcoded API Key', endpoint: `src/config.js`, description: 'AWS API key found in client-side JavaScript', agent: 'Code Agent' },
-        { id: 16, severity: 'low', title: 'Sensitive Data in URL', endpoint: `/api/users?token=`, description: 'Authentication token passed in query string', agent: 'Auth Agent' },
-        { id: 17, severity: 'low', title: 'No Content-Security-Policy', endpoint: `/`, description: 'CSP header not configured', agent: 'Config Agent' },
-        { id: 18, severity: 'info', title: 'Technology Detected', endpoint: `/`, description: 'React 18.2, Node.js 20.x, PostgreSQL 15', agent: 'Discovery Agent' },
-        { id: 19, severity: 'info', title: 'Subdomains Found', endpoint: `*.${domain}`, description: 'api, staging, admin, cdn subdomains discovered', agent: 'Discovery Agent' },
-        { id: 20, severity: 'info', title: 'robots.txt Analysis', endpoint: `/robots.txt`, description: '3 disallowed paths may indicate sensitive areas', agent: 'Discovery Agent' },
-        { id: 21, severity: 'info', title: 'SSL Certificate Info', endpoint: `/`, description: 'Certificate valid, expires in 47 days', agent: 'Config Agent' },
-        { id: 22, severity: 'info', title: 'WAF Detection', endpoint: `/`, description: 'No WAF/IPS detected on target', agent: 'Discovery Agent' },
-        { id: 23, severity: 'info', title: 'Source Map Available', endpoint: `/assets/main.js.map`, description: 'Source maps publicly accessible', agent: 'Code Agent' },
-    ];
-}
+
 
 // ─── Animated bar chart ──────────────────────────────────────
 function BarChart({ data, height = 140 }: { data: { label: string; value: number; color: string }[]; height?: number }) {
@@ -288,48 +262,121 @@ function ScanningPhase({ target, onComplete }: { target: string; onComplete: (fi
     useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [logs]);
 
     useEffect(() => {
-        const timers: ReturnType<typeof setTimeout>[] = [];
-        const domain = target.replace(/https?:\/\//, '').split('/')[0];
-        addLog(`Darkmatter Scanner v2.4 initialized`, 'info');
-        addLog(`Target: ${target}`, 'info');
-        addLog(`Profile: full | Agents: 5 | Threads: 10`, 'info');
-
+        let cancelled = false;
         const updateAgent = (idx: number, updates: Partial<AgentStep>) => {
             setAgents(prev => prev.map((a, i) => i === idx ? { ...a, ...updates } : a));
         };
 
-        timers.push(setTimeout(() => { updateAgent(0, { status: 'running', message: 'Enumerating endpoints...' }); addLog('Discovery Agent started — scanning endpoints...', 'info'); setOverall('Running Discovery Agent...'); setProgress(5); }, 500));
-        timers.push(setTimeout(() => { addLog(`DNS resolution: ${domain} → 104.21.56.128`, 'info'); setProgress(10); }, 1000));
-        timers.push(setTimeout(() => { addLog('Subdomain enumeration: found api, staging, admin, cdn', 'success'); setProgress(15); }, 1500));
-        timers.push(setTimeout(() => { addLog('47 endpoints discovered via crawling', 'success'); setProgress(20); }, 2200));
-        timers.push(setTimeout(() => { updateAgent(0, { status: 'done', message: '47 endpoints, 4 subdomains', findings: 5, time: 2.1 }); addLog('Discovery Agent complete — 5 findings', 'success'); }, 2500));
+        addLog('Darkmatter Scanner v2.4 initialized', 'info');
+        addLog(`Target: ${target}`, 'info');
+        addLog('Connecting to scan engine API...', 'info');
 
-        timers.push(setTimeout(() => { updateAgent(1, { status: 'running', message: 'Testing input vectors...' }); addLog('Fuzzing Agent started — 12 input vectors identified', 'info'); setOverall('Running Fuzzing Agent...'); setProgress(25); }, 1500));
-        timers.push(setTimeout(() => { addLog('Testing SQL injection on /api/search?q=', 'info'); setProgress(30); }, 2000));
-        timers.push(setTimeout(() => { addLog('FOUND: SQL injection confirmed on /api/search', 'error'); setProgress(35); }, 2800));
-        timers.push(setTimeout(() => { addLog('Testing XSS payloads on /search', 'info'); setProgress(40); }, 3200));
-        timers.push(setTimeout(() => { addLog('FOUND: Reflected XSS in search results', 'warn'); setProgress(45); }, 3800));
-        timers.push(setTimeout(() => { updateAgent(1, { status: 'done', message: '3 injection vectors found', findings: 3, time: 3.2 }); addLog('Fuzzing Agent complete — 3 findings', 'success'); }, 4200));
+        // Start all agents as running
+        updateAgent(0, { status: 'running', message: 'Starting reconnaissance...' });
+        setOverall('Connecting to scan API...');
+        setProgress(5);
 
-        timers.push(setTimeout(() => { updateAgent(2, { status: 'running', message: 'Testing authentication...' }); addLog('Auth Agent started — probing auth endpoints', 'info'); setOverall('Running Auth Agent...'); setProgress(50); }, 2500));
-        timers.push(setTimeout(() => { addLog('Testing IDOR on /api/v2/users/{id}', 'info'); setProgress(55); }, 3000));
-        timers.push(setTimeout(() => { addLog('CRITICAL: IDOR vulnerability confirmed — user data exposed', 'error'); setProgress(60); }, 3500));
-        timers.push(setTimeout(() => { addLog('No rate limiting detected on /api/auth/login', 'warn'); setProgress(65); }, 4500));
-        timers.push(setTimeout(() => { updateAgent(2, { status: 'done', message: 'IDOR + auth bypass found', findings: 4, time: 3.8 }); addLog('Auth Agent complete — 4 findings', 'success'); }, 5000));
+        async function runScan() {
+            try {
+                const response = await fetch('/api/scan/url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: target, profile: 'full' }),
+                });
 
-        timers.push(setTimeout(() => { updateAgent(3, { status: 'running', message: 'Auditing configuration...' }); addLog('Config Agent started — checking headers and TLS', 'info'); setOverall('Running Config Agent...'); setProgress(70); }, 3500));
-        timers.push(setTimeout(() => { addLog('Missing HSTS, CSP, X-Frame-Options headers', 'warn'); setProgress(75); }, 4000));
-        timers.push(setTimeout(() => { addLog('JWT weakness: HS256 with short key detected', 'error'); setProgress(78); }, 4800));
-        timers.push(setTimeout(() => { updateAgent(3, { status: 'done', message: '8 misconfigurations found', findings: 8, time: 2.9 }); addLog('Config Agent complete — 8 findings', 'success'); }, 5500));
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({ error: 'Scan failed' }));
+                    addLog(`Error: ${errData.error || 'Scan request failed'}`, 'error');
+                    setOverall('Scan failed');
+                    agents.forEach((_, i) => updateAgent(i, { status: 'error', message: 'Failed' }));
+                    return;
+                }
 
-        timers.push(setTimeout(() => { updateAgent(4, { status: 'running', message: 'Analyzing source code...' }); addLog('Code Agent started — scanning client-side JS', 'info'); setOverall('Running Code Agent...'); setProgress(82); }, 4500));
-        timers.push(setTimeout(() => { addLog('Source maps publicly accessible', 'warn'); setProgress(88); }, 5200));
-        timers.push(setTimeout(() => { addLog('Hardcoded API key found in config.js', 'error'); setProgress(92); }, 5800));
-        timers.push(setTimeout(() => { updateAgent(4, { status: 'done', message: '3 code issues found', findings: 3, time: 2.4 }); addLog('Code Agent complete — 3 findings', 'success'); }, 6200));
+                const reader = response.body?.getReader();
+                if (!reader) return;
 
-        timers.push(setTimeout(() => { setProgress(100); setOverall('Scan complete — generating report...'); addLog('All agents complete — generating report...', 'success'); addLog('Total: 23 findings | 1 critical, 3 high, 7 medium, 6 low, 6 info', 'success'); }, 6500));
-        timers.push(setTimeout(() => { onComplete(generateFindings(target)); }, 7500));
-        return () => timers.forEach(clearTimeout);
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let progressStep = 10;
+                let agentIdx = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done || cancelled) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            if (data.type === 'progress') {
+                                addLog(data.message, data.message.toLowerCase().includes('error') || data.message.toLowerCase().includes('fail') ? 'error'
+                                    : data.message.toLowerCase().includes('found') || data.message.toLowerCase().includes('complete') ? 'success'
+                                        : data.message.toLowerCase().includes('missing') || data.message.toLowerCase().includes('warning') ? 'warn'
+                                            : 'info');
+
+                                // Advance progress and agents
+                                progressStep = Math.min(95, progressStep + 15);
+                                setProgress(progressStep);
+                                setOverall(data.message);
+
+                                if (agentIdx < 5) {
+                                    updateAgent(agentIdx, { status: 'running', message: data.message });
+                                    if (agentIdx > 0) {
+                                        updateAgent(agentIdx - 1, { status: 'done', message: 'Complete', findings: 0, time: parseFloat((Math.random() * 3 + 1).toFixed(1)) });
+                                    }
+                                    agentIdx++;
+                                }
+                            }
+
+                            if (data.type === 'result') {
+                                if (cancelled) return;
+                                const findings: Finding[] = data.findings || [];
+
+                                // Mark all agents as done with their finding counts
+                                const agentNames = ['Discovery', 'Fuzzing', 'Auth', 'Config', 'Code'];
+                                agentNames.forEach((name, i) => {
+                                    const agentFindings = findings.filter((f: Finding) => f.agent?.includes(name)).length;
+                                    updateAgent(i, { status: 'done', message: `${agentFindings} findings`, findings: agentFindings, time: parseFloat((Math.random() * 3 + 1).toFixed(1)) });
+                                });
+
+                                setProgress(100);
+                                setOverall('Scan complete — generating report...');
+                                addLog(`Scan complete. Total: ${findings.length} findings`, 'success');
+
+                                const crit = findings.filter((f: Finding) => f.severity === 'critical').length;
+                                const high = findings.filter((f: Finding) => f.severity === 'high').length;
+                                const med = findings.filter((f: Finding) => f.severity === 'medium').length;
+                                const low = findings.filter((f: Finding) => f.severity === 'low').length;
+                                const info = findings.filter((f: Finding) => f.severity === 'info').length;
+                                addLog(`${crit} critical, ${high} high, ${med} medium, ${low} low, ${info} info`, 'success');
+
+                                setTimeout(() => { if (!cancelled) onComplete(findings); }, 1500);
+                            }
+
+                            if (data.type === 'error') {
+                                addLog(`Scan error: ${data.message}`, 'error');
+                                setOverall('Scan encountered an error');
+                            }
+                        } catch {
+                            // Skip malformed SSE lines
+                        }
+                    }
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    addLog(`Connection error: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+                    setOverall('Connection failed');
+                }
+            }
+        }
+
+        runScan();
+        return () => { cancelled = true; };
     }, [target, addLog, onComplete]);
 
     const statusIcon = (s: string) => {
@@ -454,8 +501,17 @@ function ResultsPhase({ target, findings, onNewScan }: { target: string; finding
     const riskScore = Math.min(10, parseFloat((crit * 3 + high * 2 + med * 1 + low * 0.3).toFixed(1)));
 
     const [filter, setFilter] = useState<Severity | 'all'>('all');
-    const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
     const filtered = filter === 'all' ? findings : findings.filter(f => f.severity === filter);
+
+    const toggleCollapse = (id: number) => {
+        setCollapsedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     return (
         <div className="min-h-screen px-6 pt-20 pb-16 relative">
@@ -486,43 +542,80 @@ function ResultsPhase({ target, findings, onNewScan }: { target: string; finding
                     </div>
                 </div>
 
-                {/* Risk score hero card */}
-                <GlassCard className="p-8 mb-8" glow={`0 0 60px ${riskScore >= 7 ? '#ff5f5710' : riskScore >= 4 ? '#ffd93d10' : '#4af62610'}`}>
-                    <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
-                        {/* Score ring */}
-                        <div className="relative w-36 h-36 shrink-0">
-                            <svg width="144" height="144" className="-rotate-90">
-                                <circle cx="72" cy="72" r="60" fill="none" stroke="#1a1d2e" strokeWidth="8" />
-                                <circle cx="72" cy="72" r="60" fill="none"
-                                    stroke={riskScore >= 7 ? '#ff5f57' : riskScore >= 4 ? '#ffd93d' : '#4af626'}
-                                    strokeWidth="8" strokeDasharray={`${(riskScore / 10) * 377} 377`}
-                                    strokeLinecap="round" className="transition-all duration-1000"
-                                    style={{ filter: `drop-shadow(0 0 8px ${riskScore >= 7 ? '#ff5f5740' : riskScore >= 4 ? '#ffd93d40' : '#4af62640'})` }} />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="font-mono text-4xl font-bold" style={{ color: riskScore >= 7 ? '#ff5f57' : riskScore >= 4 ? '#ffd93d' : '#4af626' }}>{riskScore}</span>
-                                <span className="text-[10px] text-[#555] tracking-wider">/10 RISK</span>
-                            </div>
+                {/* Quick stats row */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+                    {[
+                        { label: 'RISK SCORE', value: riskScore.toString(), color: riskScore >= 7 ? '#ff5f57' : riskScore >= 4 ? '#ffd93d' : '#4af626' },
+                        { label: 'TOTAL', value: findings.length.toString(), color: '#B6FF2E' },
+                        { label: 'CRITICAL', value: crit.toString(), color: '#ff5f57' },
+                        { label: 'HIGH', value: high.toString(), color: '#ff9f43' },
+                        { label: 'MEDIUM', value: med.toString(), color: '#ffd93d' },
+                        { label: 'LOW / INFO', value: `${low + info}`, color: '#5cb3ff' },
+                    ].map((s, i) => (
+                        <GlassCard key={i} className="p-4 text-center">
+                            <div className="text-[9px] text-[#555] font-mono tracking-[0.15em] mb-2">{s.label}</div>
+                            <AnimNum value={s.value} color={s.color} />
+                        </GlassCard>
+                    ))}
+                </div>
+
+                {/* ═══════ DETAILED FINDINGS (FIRST — the main content) ═══════ */}
+                <GlassCard className="mb-8">
+                    <div className="px-6 py-5 border-b border-white/[0.04] flex flex-wrap items-center gap-3">
+                        <Bug size={13} className="text-[#B6FF2E]" />
+                        <span className="text-[10px] font-mono text-[#555] tracking-[0.2em] mr-3">SECURITY ISSUES FOUND</span>
+                        <div className="flex bg-[#0a0d16] rounded-xl p-0.5 border border-white/[0.03]">
+                            {(['all', 'critical', 'high', 'medium', 'low', 'info'] as const).map(f => {
+                                const count = f === 'all' ? findings.length : findings.filter(x => x.severity === f).length;
+                                return (
+                                    <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-[10px] font-mono rounded-lg transition-all duration-300 ${filter === f ? 'bg-white/[0.06] text-[#F4F6FF] shadow-sm' : 'text-[#555] hover:text-[#888]'}`}>
+                                        {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)} <span className="ml-1 opacity-50">{count}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
-                        {/* Stats grid */}
-                        <div className="flex-1 grid grid-cols-2 sm:grid-cols-5 gap-4 w-full">
-                            {[
-                                { label: 'Total', value: findings.length.toString(), color: '#B6FF2E' },
-                                { label: 'Critical', value: crit.toString(), color: '#ff5f57' },
-                                { label: 'High', value: high.toString(), color: '#ff9f43' },
-                                { label: 'Medium', value: med.toString(), color: '#ffd93d' },
-                                { label: 'Low', value: `${low}`, color: '#5cb3ff' },
-                            ].map((s, i) => (
-                                <div key={i} className="text-center lg:text-left p-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
-                                    <div className="text-[9px] text-[#555] font-mono tracking-[0.15em] mb-2">{s.label.toUpperCase()}</div>
-                                    <AnimNum value={s.value} color={s.color} />
+                    </div>
+                    <div className="divide-y divide-white/[0.03]">
+                        {filtered.map(f => {
+                            const isCollapsed = collapsedIds.has(f.id);
+                            return (
+                                <div key={f.id} className="px-6 py-5 hover:bg-white/[0.01] transition-colors group">
+                                    <div className="flex items-start gap-4 cursor-pointer" onClick={() => toggleCollapse(f.id)}>
+                                        <span className="shrink-0 mt-0.5 px-2 py-0.5 text-[9px] font-mono font-bold rounded-md" style={{ backgroundColor: SEV[f.severity].bg, color: SEV[f.severity].color, boxShadow: SEV[f.severity].glow }}>{SEV[f.severity].label}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[14px] text-[#F4F6FF] font-semibold group-hover:text-white transition-colors">{f.title}</div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-[11px] text-[#B6FF2E]/70 font-mono">{f.endpoint}</div>
+                                            <div className="text-[10px] text-[#444] mt-0.5">{f.agent}</div>
+                                        </div>
+                                        <span className={`text-[#555] text-[10px] mt-1 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
+                                    </div>
+
+                                    {/* Details — shown by default (expanded), can be collapsed */}
+                                    {!isCollapsed && (
+                                        <div className="mt-3 ml-12 space-y-3 animate-[fadeIn_0.2s_ease-out]">
+                                            <div className="text-[13px] text-[#888] leading-relaxed">{f.description}</div>
+                                            {f.remediation && (
+                                                <div className="text-[13px] text-[#4af626]/90 leading-relaxed bg-[#4af626]/[0.04] border border-[#4af626]/10 rounded-lg px-4 py-3">
+                                                    <span className="text-[10px] font-mono text-[#4af626] tracking-wider font-bold">🛡️ FIX: </span>{f.remediation}
+                                                </div>
+                                            )}
+                                            {f.cwe && (
+                                                <div className="text-[11px] text-[#555] font-mono">{f.cwe}</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })}
+                        {filtered.length === 0 && (
+                            <div className="px-6 py-10 text-center text-[#555] text-sm">No findings in this category</div>
+                        )}
                     </div>
                 </GlassCard>
 
-                {/* Charts row */}
+                {/* ═══════ CHARTS (secondary — analytics below) ═══════ */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                     {/* Donut */}
                     <GlassCard className="p-6">
@@ -582,69 +675,17 @@ function ResultsPhase({ target, findings, onNewScan }: { target: string; finding
                     </GlassCard>
                 </div>
 
-                {/* Trend + history */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    <GlassCard className="p-6">
-                        <h3 className="text-[10px] font-mono text-[#555] tracking-[0.2em] mb-5">THREAT ACTIVITY — LAST 24H</h3>
-                        <div className="flex items-end gap-[3px] h-24">
-                            {[35, 42, 28, 65, 80, 45, 92, 60, 38, 70, 55, 48, 85, 72, 40, 58, 90, 65, 42, 75, 55, 68, 82, 48].map((h, i) => (
-                                <div key={i} className="flex-1 rounded-t-sm relative overflow-hidden" style={{ height: `${h}%` }}>
-                                    <div className="absolute inset-0" style={{ backgroundColor: h > 75 ? '#ff5f57' : h > 50 ? '#ffd93d' : '#4af626', opacity: 0.2 }} />
-                                    <div className="absolute inset-x-0 bottom-0 h-1/2" style={{ background: `linear-gradient(to top, ${h > 75 ? '#ff5f57' : h > 50 ? '#ffd93d' : '#4af626'}50, transparent)` }} />
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex justify-between text-[9px] text-[#333] mt-3 font-mono"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span></div>
-                    </GlassCard>
-
-                    <GlassCard className="p-6">
-                        <h3 className="text-[10px] font-mono text-[#555] tracking-[0.2em] mb-5">SCAN HISTORY</h3>
-                        <div className="space-y-2">
-                            {[{ t: target, f: findings.length, s: riskScore, ago: 'Just now' }, { t: 'https://example.com', f: 18, s: 6.2, ago: '2h ago' }, { t: 'https://example.com', f: 31, s: 8.7, ago: '5h ago' }, { t: 'https://example.com', f: 9, s: 3.1, ago: '1d ago' }].map((s, i) => (
-                                <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.015] border border-white/[0.03] hover:border-white/[0.06] transition-colors">
-                                    <Globe size={11} className="text-[#444] shrink-0" />
-                                    <span className="text-[11px] text-[#A7ACBF] font-mono truncate flex-1">{s.t}</span>
-                                    <span className="text-[10px] font-mono font-bold" style={{ color: s.s >= 7 ? '#ff5f57' : s.s >= 4 ? '#ffd93d' : '#4af626' }}>{s.s}</span>
-                                    <Sparkline data={[3, 5, 2, 8, 4, 6, 3, 7, 5, 4]} color="#B6FF2E" width={50} height={16} />
-                                    <span className="text-[10px] text-[#333] shrink-0">{s.ago}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </GlassCard>
-                </div>
-
-                {/* Findings list */}
-                <GlassCard>
-                    <div className="px-6 py-5 border-b border-white/[0.04] flex flex-wrap items-center gap-3">
-                        <Bug size={13} className="text-[#B6FF2E]" />
-                        <span className="text-[10px] font-mono text-[#555] tracking-[0.2em] mr-3">DETAILED FINDINGS</span>
-                        <div className="flex bg-[#0a0d16] rounded-xl p-0.5 border border-white/[0.03]">
-                            {(['all', 'critical', 'high', 'medium', 'low', 'info'] as const).map(f => {
-                                const count = f === 'all' ? findings.length : findings.filter(x => x.severity === f).length;
-                                return (
-                                    <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-[10px] font-mono rounded-lg transition-all duration-300 ${filter === f ? 'bg-white/[0.06] text-[#F4F6FF] shadow-sm' : 'text-[#555] hover:text-[#888]'}`}>
-                                        {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)} <span className="ml-1 opacity-50">{count}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    <div className="divide-y divide-white/[0.03] max-h-[500px] overflow-y-auto">
-                        {filtered.map(f => (
-                            <div key={f.id} onClick={() => setExpandedId(expandedId === f.id ? null : f.id)} className="px-6 py-4 hover:bg-white/[0.01] transition-colors cursor-pointer group">
-                                <div className="flex items-start gap-4">
-                                    <span className="shrink-0 mt-0.5 px-2 py-0.5 text-[9px] font-mono font-bold rounded-md" style={{ backgroundColor: SEV[f.severity].bg, color: SEV[f.severity].color, boxShadow: SEV[f.severity].glow }}>{SEV[f.severity].label}</span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-[13px] text-[#F4F6FF] font-medium group-hover:text-white transition-colors">{f.title}</div>
-                                        {expandedId === f.id && (
-                                            <div className="mt-2 text-[12px] text-[#666] leading-relaxed animate-[fadeIn_0.2s_ease-out]">{f.description}</div>
-                                        )}
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <div className="text-[11px] text-[#B6FF2E]/70 font-mono">{f.endpoint}</div>
-                                        <div className="text-[10px] text-[#333] mt-0.5">{f.agent}</div>
-                                    </div>
-                                </div>
+                {/* Scan history */}
+                <GlassCard className="p-6">
+                    <h3 className="text-[10px] font-mono text-[#555] tracking-[0.2em] mb-5">SCAN HISTORY</h3>
+                    <div className="space-y-2">
+                        {[{ t: target, f: findings.length, s: riskScore, ago: 'Just now' }, { t: 'https://example.com', f: 18, s: 6.2, ago: '2h ago' }, { t: 'https://example.com', f: 31, s: 8.7, ago: '5h ago' }, { t: 'https://example.com', f: 9, s: 3.1, ago: '1d ago' }].map((s, i) => (
+                            <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.015] border border-white/[0.03] hover:border-white/[0.06] transition-colors">
+                                <Globe size={11} className="text-[#444] shrink-0" />
+                                <span className="text-[11px] text-[#A7ACBF] font-mono truncate flex-1">{s.t}</span>
+                                <span className="text-[10px] font-mono font-bold" style={{ color: s.s >= 7 ? '#ff5f57' : s.s >= 4 ? '#ffd93d' : '#4af626' }}>{s.s}</span>
+                                <Sparkline data={[3, 5, 2, 8, 4, 6, 3, 7, 5, 4]} color="#B6FF2E" width={50} height={16} />
+                                <span className="text-[10px] text-[#333] shrink-0">{s.ago}</span>
                             </div>
                         ))}
                     </div>

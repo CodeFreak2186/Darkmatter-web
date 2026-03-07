@@ -294,34 +294,95 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                     { text: '', type: 'output' },
                     { text: `[*] Darkmatter Scanner v2.4 initialized`, type: 'info' },
                     { text: `[*] Target: ${target}`, type: 'info' },
-                    { text: `[*] Profile: full | Agents: 5 | Threads: 10`, type: 'info' },
-                    { text: '', type: 'output' },
-                    { text: '[▸] Running discovery agent...', type: 'output' },
-                    { text: '[▸] Running fuzzing agent...', type: 'output' },
-                    { text: '[▸] Running auth agent...', type: 'output' },
-                    { text: '[▸] Running config agent...', type: 'output' },
-                    { text: '[▸] Running code agent...', type: 'output' },
-                    { text: '', type: 'output' },
-                    { text: '[✓] Discovery — 47 endpoints found', type: 'success' },
-                    { text: '[✓] Fuzzing — 12 input vectors tested', type: 'success' },
-                    { text: '[✓] Auth — 3 privilege escalation paths found', type: 'success' },
-                    { text: '[!] CRITICAL: IDOR vulnerability on /api/v2/users/{id}', type: 'error' },
-                    { text: '[!] HIGH: SQL injection in /api/search?q=', type: 'error' },
-                    { text: '[!] HIGH: Missing rate limiting on /api/auth/login', type: 'error' },
-                    { text: '[!] HIGH: JWT secret weakness detected', type: 'error' },
-                    { text: '[✓] Config — 7 misconfigurations detected', type: 'success' },
-                    { text: '[✓] Code — 4 hardcoded secrets found', type: 'success' },
-                    { text: '', type: 'output' },
-                    { text: '═══════════════════════════════════════════════════', type: 'output' },
-                    { text: '  SCAN RESULTS', type: 'info' },
-                    { text: '═══════════════════════════════════════════════════', type: 'output' },
-                    { text: '  Critical:  1  │  High:  3  │  Medium:  7  │  Low:  12', type: 'output' },
-                    { text: '  Total findings: 23  │  Scan time: 4.82s', type: 'output' },
-                    { text: '═══════════════════════════════════════════════════', type: 'output' },
-                    { text: '  [+] Report saved to /home/darkmatter/reports/', type: 'success' },
+                    { text: `[*] Connecting to scan API...`, type: 'info' },
                     { text: '', type: 'output' },
                 );
-                break;
+                addLines(output);
+
+                // Real API call
+                (async () => {
+                    try {
+                        const response = await fetch('/api/scan/url', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: target, profile: 'full' }),
+                        });
+
+                        if (!response.ok) {
+                            const err = await response.json().catch(() => ({ error: 'Scan failed' }));
+                            addLines([{ text: `[!] Error: ${err.error || 'Scan request failed'}`, type: 'error' }]);
+                            return;
+                        }
+
+                        const reader = response.body?.getReader();
+                        if (!reader) return;
+
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n\n');
+                            buffer = lines.pop() || '';
+
+                            for (const line of lines) {
+                                if (!line.startsWith('data: ')) continue;
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+
+                                    if (data.type === 'progress') {
+                                        const isError = data.message.toLowerCase().includes('missing') || data.message.toLowerCase().includes('found');
+                                        addLines([{ text: `[▸] ${data.message}`, type: isError ? 'error' : 'output' }]);
+                                    }
+
+                                    if (data.type === 'result') {
+                                        const findings = data.findings || [];
+                                        const resultLines: TermLine[] = [
+                                            { text: '', type: 'output' },
+                                            { text: '═══════════════════════════════════════════════════', type: 'output' },
+                                            { text: '  SCAN RESULTS', type: 'info' },
+                                            { text: '═══════════════════════════════════════════════════', type: 'output' },
+                                        ];
+
+                                        // Show each finding
+                                        for (const f of findings) {
+                                            const sevLabel = f.severity.toUpperCase().padEnd(8);
+                                            const type: TermLine['type'] = f.severity === 'critical' || f.severity === 'high' ? 'error' : f.severity === 'medium' ? 'info' : 'output';
+                                            resultLines.push({ text: `  [${sevLabel}] ${f.title}`, type });
+                                            resultLines.push({ text: `             ${f.endpoint} — ${f.description}`, type: 'output' });
+                                            if (f.remediation) {
+                                                resultLines.push({ text: `             Fix: ${f.remediation}`, type: 'success' });
+                                            }
+                                        }
+
+                                        resultLines.push(
+                                            { text: '', type: 'output' },
+                                            { text: `  Critical: ${data.critical || 0}  │  High: ${data.high || 0}  │  Medium: ${data.medium || 0}  │  Low: ${data.low || 0}`, type: 'output' },
+                                            { text: `  Total findings: ${data.totalFindings || 0}`, type: 'output' },
+                                            { text: '═══════════════════════════════════════════════════', type: 'output' },
+                                            { text: '  [+] Scan complete.', type: 'success' },
+                                            { text: '', type: 'output' },
+                                        );
+
+                                        addLines(resultLines);
+                                    }
+
+                                    if (data.type === 'error') {
+                                        addLines([{ text: `[!] Error: ${data.message}`, type: 'error' }]);
+                                    }
+                                } catch {
+                                    // Skip malformed SSE
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        addLines([{ text: `[!] Connection error: ${err instanceof Error ? err.message : 'Unknown'}`, type: 'error' }]);
+                    }
+                })();
+                return; // Return early since we're handling output async
             }
 
             case 'sqlmap': {
