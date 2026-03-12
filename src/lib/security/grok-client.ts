@@ -3,7 +3,7 @@
 
 import { GrokAnalysis, Severity } from './types';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function getApiKey(): string {
     const key = process.env.GEMINI_API_KEY;
