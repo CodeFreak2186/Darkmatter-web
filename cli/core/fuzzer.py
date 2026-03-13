@@ -51,7 +51,6 @@ class FuzzEngine:
             on_progress=lambda msg: self.on_progress("validate", msg)
         )
         self.reporter = Reporter()
-
         self.max_payloads_per_param = max_payloads_per_param
         self.surface: AttackSurface | None = None
         self.all_detections: list[Detection] = []

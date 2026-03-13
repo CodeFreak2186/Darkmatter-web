@@ -1,0 +1,4 @@
+{"timestamp": 1773400224, "human_time": "Fri Mar 13 16:40:24 2026", "command": "init", "target": "localhost", "target_ip": "127.0.0.1", "attacker_ip": "150.129.131.181", "os": "nt", "metadata": {"user": "anonymous"}}
+{"timestamp": 1773400269, "human_time": "Fri Mar 13 16:41:09 2026", "command": "scan", "target": "https://example.com", "target_ip": "104.18.27.120", "attacker_ip": "192.168.0.145", "os": "nt", "metadata": {"profile": "full", "mode": "batch"}}
+{"timestamp": 1773400296, "human_time": "Fri Mar 13 16:41:36 2026", "command": "scan", "target": "https://www.itsecgames.com/", "target_ip": "31.3.96.40", "attacker_ip": "150.129.131.181", "os": "nt", "metadata": {"profile": "full", "mode": "batch"}}
+{"timestamp": 1773401433, "human_time": "Fri Mar 13 17:00:33 2026", "command": "scan", "target": "https://www.itsecgames.com", "target_ip": "31.3.96.40", "attacker_ip": "150.129.131.181", "os": "nt", "metadata": {"profile": "full", "mode": "batch"}}

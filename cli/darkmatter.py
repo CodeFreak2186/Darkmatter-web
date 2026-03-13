@@ -27,8 +27,22 @@ if sys.stdout.encoding.lower() != "utf-8" and hasattr(sys.stdout, "reconfigure")
 
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent.parent / ".env")
-load_dotenv(Path(__file__).parent / ".env")
+
+# Robust .env loading for both Dev and Compiled (PyInstaller) modes
+def get_resource_path():
+    if getattr(sys, 'frozen', False):
+        # Running as a compiled binary
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+res_path = get_resource_path()
+cwd_path = Path.cwd()
+
+# Search priority: CWD -> Exe Folder -> Parent -> Root
+load_dotenv(cwd_path / ".env")
+load_dotenv(res_path / ".env")
+load_dotenv(res_path.parent / ".env")
+load_dotenv(res_path.parent.parent / ".env")
 
 from google import genai
 from rich.console import Console
@@ -40,6 +54,7 @@ from rich import box
 from agents import AGENTS, get_domain, build_batch_prompt
 from core.agent import RedTeamAgent
 from core.crawler import Crawler
+from core.tracker import DarkmatterTracker, ensure_initialized
 
 # ─── Setup ─────────────────────────────────────────────────────
 
@@ -623,6 +638,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
+  init       Initialize a Darkmatter Lab (required before scanning)
+  log        View the audit log (provenance tracking)
   agent      TRULY AUTONOMOUS Agent (Analyses code, runs tools, executes scripts)
   scan       AI-powered security scan (informed by real recon)
   fuzz       Real active fuzzing (crawl + classify + inject payloads + detect)
@@ -630,12 +647,20 @@ Commands:
   lifecycle  4-Phase Rigorous Pentest Lifecycle (Recon -> Vuln Analysis -> Exploit -> Report)
 
 Examples:
-  python darkmatter.py agent "Analyze the security of https://example.com and find SQLi"
+  python darkmatter.py init
+  python darkmatter.py agent "Analyze the security of https://example.com and find SQLi" --target https://example.com
   python darkmatter.py scan https://example.com
   python darkmatter.py lifecycle https://example.com --profile quick
         """,
     )
     sub = parser.add_subparsers(dest="command")
+
+    # init command
+    ip = sub.add_parser("init", help="Initialize a Darkmatter Lab in the current directory")
+    ip.add_argument("--name", default="anonymous", help="Name of the operator")
+
+    # log command
+    sub.add_parser("log", help="View the Darkmatter audit log")
 
     # agent command
     at = sub.add_parser("agent", help="Mission-driven autonomous agent")
@@ -673,6 +698,46 @@ Examples:
 
     args = parser.parse_args()
 
+    tracker = DarkmatterTracker()
+
+    if args.command == "init":
+        tracker.init_workspace(user_name=args.name, show_banner_callback=print_banner)
+        return
+
+    if args.command == "log":
+        if not tracker.is_initialized():
+            console.print("[bold red]✗ Error: Darkmatter Lab not initialized.[/]")
+            return
+        
+        console.rule("[bold cyan]DARKMATTER AUDIT LOG (PROVENANCE)", style="cyan")
+        if not tracker.log_file.exists():
+            console.print("  [dim]No log entries found.[/]")
+        else:
+            with open(tracker.log_file, "r") as f:
+                for line in f:
+                    entry = json.loads(line)
+                    ts = entry.get("human_time")
+                    cmd = entry.get("command")
+                    tgt = entry.get("target")
+                    tgt_ip = entry.get("target_ip", "unknown")
+                    atk = entry.get("attacker_ip")
+                    sys_os = entry.get("os", "?")
+                    
+                    console.print(f"[bold green]Commit:[/] {entry.get('timestamp')}")
+                    console.print(f"  [bold white]Action:[/]    {cmd}")
+                    console.print(f"  [bold white]Target:[/]    {tgt} [dim]({tgt_ip})[/]")
+                    console.print(f"  [bold white]Attacker:[/]  {atk} [dim](OS: {sys_os})[/]")
+                    console.log(f"  [dim]Timestamp: {ts}[/]")
+                    console.print("-" * 40)
+        return
+
+    # Check for initialization for all other commands
+    if args.command in ["agent", "scan", "fuzz", "attack", "lifecycle"]:
+        if not tracker.is_initialized():
+            console.print("[bold red]✗ Error: Darkmatter Lab not initialized.[/]")
+            console.print("You must run [bold cyan]python darkmatter.py init[/] before performing any operations.")
+            sys.exit(1)
+
     def ensure_http(url):
         url = url.strip()
         if not url.startswith("http://") and not url.startswith("https://"):
@@ -680,18 +745,27 @@ Examples:
         return url
 
     if args.command == "agent":
+        tracker.track_action("agent", args.target, {"goal": args.goal})
         agent = RedTeamAgent(api_key=API_KEY)
         import asyncio
         asyncio.run(agent.execute_mission(args.goal, args.target))
     elif args.command == "scan":
+        target = ensure_http(args.target)
+        tracker.track_action("scan", target, {"profile": args.profile, "mode": args.mode})
         import asyncio
-        asyncio.run(run_scan(ensure_http(args.target), args.profile, args.mode))
+        asyncio.run(run_scan(target, args.profile, args.mode))
     elif args.command == "fuzz":
-        run_fuzz(ensure_http(args.target), args.profile, args.rps, args.auth_token)
+        target = ensure_http(args.target)
+        tracker.track_action("fuzz", target, {"profile": args.profile, "rps": args.rps})
+        run_fuzz(target, args.profile, args.rps, args.auth_token)
     elif args.command == "attack":
-        run_attack(ensure_http(args.target), args.profile, args.mode, args.rps, args.auth_token)
+        target = ensure_http(args.target)
+        tracker.track_action("attack", target, {"profile": args.profile, "mode": args.mode})
+        run_attack(target, args.profile, args.mode, args.rps, args.auth_token)
     elif args.command == "lifecycle":
-        run_lifecycle(ensure_http(args.target), args.profile, args.rps, args.auth_token)
+        target = ensure_http(args.target)
+        tracker.track_action("lifecycle", target, {"profile": args.profile})
+        run_lifecycle(target, args.profile, args.rps, args.auth_token)
     else:
         parser.print_help()
 
