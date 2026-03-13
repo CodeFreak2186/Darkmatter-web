@@ -42,7 +42,7 @@ from agents import AGENTS, get_domain, build_batch_prompt
 # ─── Setup ─────────────────────────────────────────────────────
 
 console = Console()
-MODEL_FALLBACKS = ["models/gemini-2.0-flash-lite", "models/gemini-2.0-flash", "models/gemini-2.5-flash"]
+MODEL_NAME = "models/gemini-2.5-flash"
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not API_KEY:
@@ -66,29 +66,23 @@ SEV_ICONS = {
 # ─── Gemini API ────────────────────────────────────────────────
 
 def call_gemini(label: str, prompt: str, max_tokens: int = 4096) -> str:
-    last_err = None
-    for model_name in MODEL_FALLBACKS:
-        try:
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=genai.types.GenerateContentConfig(
-                    temperature=0.7,
-                    max_output_tokens=max_tokens,
-                ),
-            )
-            console.print(f"  [dim]Using model: {model_name}[/]")
-            return resp.text or ""
-        except Exception as e:
-            last_err = e
-            msg = str(e)
-            if "API_KEY_INVALID" in msg or "API key expired" in msg:
-                raise
-            if "NOT_FOUND" in msg or "404" in msg:
-                console.print(f"  [dim]Model {model_name} unavailable, trying next...[/]")
-                continue
+    try:
+        resp = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        console.print(f"  [dim]Using model: {MODEL_NAME}[/]")
+        return resp.text or ""
+    except Exception as e:
+        msg = str(e)
+        if "API_KEY_INVALID" in msg or "API key expired" in msg:
             raise
-    raise last_err or Exception("All models failed")
+        console.print(f"  [bold red]Error calling Gemini ({MODEL_NAME}): {msg}[/]")
+        raise e
 
 
 def parse_json(raw: str) -> dict[str, Any]:
