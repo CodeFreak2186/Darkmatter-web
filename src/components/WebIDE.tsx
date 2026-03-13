@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Editor from '@monaco-editor/react';
 import {
     ChevronRight, ChevronDown, File, Folder, FolderOpen, X, Terminal as TerminalIcon,
     Settings, Search, GitBranch, Bug, Boxes, PanelLeft,
-    Plus, MoreHorizontal, ArrowLeft, Bell, Wifi, CheckCircle
+    Plus, MoreHorizontal, ArrowLeft, Bell, Wifi, CheckCircle,
+    Upload, Shield, Loader2, FolderUp
 } from 'lucide-react';
 
 // ─── File System ─────────────────────────────────────────────
@@ -18,227 +19,93 @@ interface FSNode {
     language?: string;
 }
 
+function detectLanguage(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const map: Record<string, string> = {
+        py: 'python', js: 'javascript', ts: 'typescript', tsx: 'typescript', jsx: 'javascript',
+        java: 'java', go: 'go', rb: 'ruby', php: 'php', cs: 'csharp', c: 'c', cpp: 'cpp',
+        rs: 'rust', html: 'html', css: 'css', scss: 'scss', json: 'json', xml: 'xml',
+        yaml: 'yaml', yml: 'yaml', md: 'markdown', sql: 'sql', sh: 'shell', bash: 'shell',
+        env: 'plaintext', txt: 'plaintext', tf: 'hcl', dockerfile: 'dockerfile',
+    };
+    return map[ext] || 'plaintext';
+}
+
+function buildFSTree(files: { path: string; content: string }[]): FSNode[] {
+    const root: FSNode[] = [];
+
+    for (const file of files) {
+        const parts = file.path.split('/');
+        let currentLevel = root;
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            const isFile = i === parts.length - 1;
+
+            if (isFile) {
+                currentLevel.push({
+                    name: part,
+                    type: 'file',
+                    content: file.content,
+                    language: detectLanguage(part),
+                });
+            } else {
+                let folder = currentLevel.find(n => n.name === part && n.type === 'folder');
+                if (!folder) {
+                    folder = { name: part, type: 'folder', children: [] };
+                    currentLevel.push(folder);
+                }
+                currentLevel = folder.children!;
+            }
+        }
+    }
+    return root;
+}
+
 const DEFAULT_FS: FSNode[] = [
     {
-        name: 'src', type: 'folder', children: [
+        name: 'example', type: 'folder', children: [
             {
-                name: 'main.py', type: 'file', language: 'python', content: `#!/usr/bin/env python3
-"""Darkmatter Security Scanner — Entry Point"""
+                name: 'app.py', type: 'file', language: 'python', content: `# Example vulnerable app — upload your own files to scan!
+import sqlite3
+from flask import Flask, request
 
-import asyncio
-from scanner.engine import ScanEngine
-from scanner.reporter import Reporter
-from config import load_config
+app = Flask(__name__)
 
-async def main():
-    config = load_config("config.yaml")
-    engine = ScanEngine(config)
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
     
-    print("[*] Darkmatter Scanner v2.4 initialized")
-    print(f"[*] Target: {config.target}")
-    print(f"[*] Scan profile: {config.profile}")
-    print()
+    # WARNING: SQL Injection vulnerability!
+    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+    db = sqlite3.connect('app.db')
+    result = db.execute(query)
     
-    results = await engine.run()
-    
-    reporter = Reporter(results)
-    reporter.print_summary()
-    reporter.export_pdf("report.pdf")
-    
-    print(f"\\n[+] Scan complete. {len(results.findings)} findings.")
+    return "Login success" if result.fetchone() else "Login failed"
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# Hardcoded secret — should be in env vars
+API_KEY = "sk-proj-abc123def456ghi789"
+SECRET_KEY = "super_secret_password_123"
+
+if __name__ == '__main__':
+    app.run(debug=True)  # Debug mode in production!
 ` },
             {
-                name: 'scanner', type: 'folder', children: [
-                    { name: '__init__.py', type: 'file', language: 'python', content: `"""Darkmatter Scanner Module"""\n__version__ = "2.4.0"\n` },
-                    {
-                        name: 'engine.py', type: 'file', language: 'python', content: `"""Core scanning engine with coordinated agents."""
-import asyncio
-from typing import List
-from dataclasses import dataclass, field
+                name: 'README.md', type: 'file', language: 'markdown', content: `# Darkmatter IDE
 
-@dataclass
-class Finding:
-    severity: str  # critical, high, medium, low, info
-    title: str
-    description: str
-    evidence: str = ""
-    remediation: str = ""
+Upload your code files to scan them for security vulnerabilities.
 
-@dataclass
-class ScanResults:
-    findings: List[Finding] = field(default_factory=list)
-    scan_time: float = 0.0
-    targets_scanned: int = 0
+## How to use:
+1. Click **Upload Files** or drag & drop files into the sidebar
+2. Browse and edit files in the editor
+3. Click **🛡️ Scan Code** to run AI-powered security analysis
+4. View results in the terminal below
 
-class ScanEngine:
-    """Orchestrates multiple scanning agents."""
-    
-    def __init__(self, config):
-        self.config = config
-        self.agents = []
-        self._setup_agents()
-    
-    def _setup_agents(self):
-        """Initialize scanning agents based on config."""
-        from .agents import (
-            DiscoveryAgent,
-            FuzzingAgent, 
-            AuthAgent,
-            ConfigAgent,
-            CodeAgent
-        )
-        
-        agent_map = {
-            'discovery': DiscoveryAgent,
-            'fuzzing': FuzzingAgent,
-            'auth': AuthAgent,
-            'config': ConfigAgent,
-            'code': CodeAgent,
-        }
-        
-        for name in self.config.agents:
-            if name in agent_map:
-                self.agents.append(agent_map[name](self.config))
-    
-    async def run(self) -> ScanResults:
-        """Execute all agents concurrently."""
-        import time
-        start = time.time()
-        
-        tasks = [agent.scan() for agent in self.agents]
-        agent_results = await asyncio.gather(*tasks)
-        
-        results = ScanResults()
-        for agent_findings in agent_results:
-            results.findings.extend(agent_findings)
-        
-        results.scan_time = time.time() - start
-        results.targets_scanned = self.config.target_count
-        
-        # Sort by severity
-        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
-        results.findings.sort(key=lambda f: severity_order.get(f.severity, 5))
-        
-        return results
-` },
-                    {
-                        name: 'reporter.py', type: 'file', language: 'python', content: `"""Report generation for scan results."""
-
-class Reporter:
-    def __init__(self, results):
-        self.results = results
-    
-    def print_summary(self):
-        """Print a colored summary to terminal."""
-        findings = self.results.findings
-        
-        critical = sum(1 for f in findings if f.severity == 'critical')
-        high = sum(1 for f in findings if f.severity == 'high')
-        medium = sum(1 for f in findings if f.severity == 'medium')
-        low = sum(1 for f in findings if f.severity == 'low')
-        
-        print("=" * 60)
-        print("  SCAN RESULTS SUMMARY")
-        print("=" * 60)
-        print(f"  Critical: {critical}")
-        print(f"  High:     {high}")
-        print(f"  Medium:   {medium}")
-        print(f"  Low:      {low}")
-        print(f"  Total:    {len(findings)}")
-        print(f"  Time:     {self.results.scan_time:.2f}s")
-        print("=" * 60)
-    
-    def export_pdf(self, path: str):
-        """Export findings to PDF report."""
-        print(f"  [+] Report exported to {path}")
-` },
-                ]
-            },
-            {
-                name: 'config.py', type: 'file', language: 'python', content: `"""Configuration loader."""
-import yaml
-from dataclasses import dataclass, field
-from typing import List
-
-@dataclass
-class Config:
-    target: str = "https://example.com"
-    profile: str = "full"
-    agents: List[str] = field(default_factory=lambda: [
-        'discovery', 'fuzzing', 'auth', 'config', 'code'
-    ])
-    target_count: int = 1
-    timeout: int = 300
-    threads: int = 10
-
-def load_config(path: str) -> Config:
-    """Load config from YAML file."""
-    try:
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        return Config(**data)
-    except FileNotFoundError:
-        print(f"[!] Config {path} not found, using defaults")
-        return Config()
+Powered by Gemini AI for deep vulnerability detection.
 ` },
         ]
     },
-    {
-        name: 'config.yaml', type: 'file', language: 'yaml', content: `# Darkmatter Scanner Configuration
-target: "https://api.targetapp.com"
-profile: full
-
-agents:
-  - discovery
-  - fuzzing
-  - auth
-  - config
-  - code
-
-timeout: 300
-threads: 10
-
-# Advanced options
-rate_limit: 100  # requests per second
-proxy: null
-auth_token: null
-` },
-    {
-        name: 'requirements.txt', type: 'file', language: 'plaintext', content: `aiohttp>=3.9.0
-pyyaml>=6.0
-rich>=13.0
-reportlab>=4.0
-cryptography>=41.0
-` },
-    {
-        name: 'README.md', type: 'file', language: 'markdown', content: `# Darkmatter Scanner v2.4
-
-AI-powered security scanning engine with coordinated agents.
-
-## Quick Start
-
-\`\`\`bash
-pip install -r requirements.txt
-python src/main.py
-\`\`\`
-
-## Agents
-
-| Agent | Description |
-|-------|-------------|
-| Discovery | Asset enumeration and mapping |
-| Fuzzing | Input validation testing |
-| Auth | Authentication & authorization |
-| Config | Security misconfiguration |
-| Code | Static analysis correlation |
-
-## License
-
-Proprietary — Darkmatter Labs © 2026
-` },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -254,8 +121,14 @@ function flattenFiles(nodes: FSNode[], path = ''): { path: string; node: FSNode 
 
 function getFileIcon(name: string) {
     if (name.endsWith('.py')) return <span className="text-[#3572A5]">🐍</span>;
+    if (name.endsWith('.js') || name.endsWith('.jsx')) return <span className="text-[#f7df1e]">JS</span>;
+    if (name.endsWith('.ts') || name.endsWith('.tsx')) return <span className="text-[#3178c6]">TS</span>;
     if (name.endsWith('.yaml') || name.endsWith('.yml')) return <span className="text-[#cb171e]">⚙</span>;
     if (name.endsWith('.md')) return <span className="text-[#519aba]">📝</span>;
+    if (name.endsWith('.json')) return <span className="text-[#f7df1e]">{'{}'}</span>;
+    if (name.endsWith('.html')) return <span className="text-[#e34c26]">{'<>'}</span>;
+    if (name.endsWith('.css') || name.endsWith('.scss')) return <span className="text-[#563d7c]">#</span>;
+    if (name.endsWith('.env')) return <span className="text-[#ff5f57]">🔑</span>;
     if (name.endsWith('.txt')) return <span className="text-[#888]">📄</span>;
     return <File size={14} className="text-[#888]" />;
 }
@@ -301,58 +174,22 @@ function FileTreeNode({ node, depth, path, onOpen, activeFile }: {
     );
 }
 
-// ─── Terminal ────────────────────────────────────────────────
-function TerminalPanel() {
-    const [lines, setLines] = useState<string[]>([
-        '\x1b[32m❯\x1b[0m darkmatter-scanner v2.4',
-        '\x1b[90m$ python src/main.py\x1b[0m',
-        '[*] Darkmatter Scanner v2.4 initialized',
-        '[*] Target: https://api.targetapp.com',
-        '[*] Scan profile: full',
-        '',
-        '\x1b[33m[▸]\x1b[0m Running discovery agent...',
-        '\x1b[33m[▸]\x1b[0m Running fuzzing agent...',
-        '\x1b[33m[▸]\x1b[0m Running auth agent...',
-        '\x1b[32m[✓]\x1b[0m Discovery complete — 47 endpoints found',
-        '\x1b[32m[✓]\x1b[0m Auth testing complete — 3 findings',
-        '\x1b[31m[!]\x1b[0m Critical: IDOR on /api/users/{id}',
-        '\x1b[32m[✓]\x1b[0m All agents complete',
-        '',
-        '════════════════════════════════════════',
-        '  SCAN RESULTS SUMMARY',
-        '════════════════════════════════════════',
-        '  Critical: 1',
-        '  High:     3',
-        '  Medium:   7',
-        '  Low:      12',
-        '  Total:    23',
-        '  Time:     4.82s',
-        '════════════════════════════════════════',
-        '  [+] Report exported to report.pdf',
-        '',
-    ]);
-    const [input, setInput] = useState('');
+// ─── Terminal with Scan Results ──────────────────────────────
+function TerminalPanel({ lines, input, setInput, onSubmit }: {
+    lines: string[];
+    input: string;
+    setInput: (val: string) => void;
+    onSubmit: () => void;
+}) {
     const bottomRef = useRef<HTMLDivElement>(null);
-
     useEffect(() => { bottomRef.current?.scrollIntoView(); }, [lines]);
-
-    const handleSubmit = () => {
-        if (!input.trim()) return;
-        const newLines = [...lines, `\x1b[32m❯\x1b[0m ${input}`];
-        if (input === 'clear') { setLines([]); setInput(''); return; }
-        if (input === 'help') { newLines.push('Commands: help, clear, scan, status, exit'); }
-        else if (input === 'status') { newLines.push('[*] All systems operational', '[*] 23 findings | 47 endpoints | 4.82s'); }
-        else if (input.startsWith('scan')) { newLines.push('[*] Initiating new scan...', '\x1b[33m[▸]\x1b[0m Scanning...'); }
-        else { newLines.push(`\x1b[31mCommand not found:\x1b[0m ${input}`); }
-        setLines(newLines);
-        setInput('');
-    };
 
     const renderLine = (line: string) => {
         return line
             .replace(/\x1b\[32m/g, '<span style="color:#B6FF2E">')
             .replace(/\x1b\[31m/g, '<span style="color:#ff6b6b">')
             .replace(/\x1b\[33m/g, '<span style="color:#ffd93d">')
+            .replace(/\x1b\[36m/g, '<span style="color:#5cb3ff">')
             .replace(/\x1b\[90m/g, '<span style="color:#666">')
             .replace(/\x1b\[0m/g, '</span>');
     };
@@ -360,7 +197,7 @@ function TerminalPanel() {
     return (
         <div className="h-full flex flex-col bg-[#0e1019] font-mono text-[13px]">
             <div className="flex items-center gap-3 px-3 py-1.5 border-b border-[#1e2030] text-[12px]">
-                <span className="flex items-center gap-1.5 text-white border-b-2 border-[#B6FF2E] pb-1 px-1"><TerminalIcon size={12} /> TERMINAL</span>
+                <span className="flex items-center gap-1.5 text-white border-b-2 border-[#B6FF2E] pb-1 px-1"><TerminalIcon size={12} /> SCAN OUTPUT</span>
                 <span className="flex items-center gap-1.5 text-[#666] px-1 cursor-pointer hover:text-white"><Bug size={12} /> PROBLEMS</span>
                 <div className="ml-auto flex gap-2">
                     <button className="text-[#666] hover:text-white"><Plus size={14} /></button>
@@ -377,10 +214,9 @@ function TerminalPanel() {
                 <span className="text-[#B6FF2E] mr-2">❯</span>
                 <input
                     value={input} onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                    onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
                     className="flex-1 bg-transparent text-[#ccc] outline-none text-[13px]"
                     placeholder="Type a command..."
-                    autoFocus
                 />
             </div>
         </div>
@@ -391,16 +227,26 @@ function TerminalPanel() {
 export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
     const router = useRouter();
     const handleBack = onBack || (() => router.push('/'));
+    const [fileSystem, setFileSystem] = useState<FSNode[]>(DEFAULT_FS);
     const [openTabs, setOpenTabs] = useState<{ path: string; node: FSNode }[]>([]);
     const [activeTab, setActiveTab] = useState('');
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [terminalOpen, setTerminalOpen] = useState(true);
     const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
+    const [scanning, setScanning] = useState(false);
+    const [terminalLines, setTerminalLines] = useState<string[]>([
+        '\x1b[32m❯\x1b[0m Darkmatter IDE — Security Code Analyzer',
+        '\x1b[90mUpload files and click "Scan Code" to analyze for vulnerabilities\x1b[0m',
+        '',
+    ]);
+    const [terminalInput, setTerminalInput] = useState('');
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Open default file
     useEffect(() => {
         const allFiles = flattenFiles(DEFAULT_FS);
-        const mainFile = allFiles.find(f => f.path === 'src/main.py');
+        const mainFile = allFiles.find(f => f.path.endsWith('README.md')) || allFiles[0];
         if (mainFile) {
             setOpenTabs([mainFile]);
             setActiveTab(mainFile.path);
@@ -425,6 +271,210 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
 
     const activeNode = openTabs.find(t => t.path === activeTab)?.node;
 
+    // ─── File Upload Handler ─────────────────────────────────
+    const handleFileUpload = useCallback(async (fileList: FileList) => {
+        const uploadedFiles: { path: string; content: string }[] = [];
+
+        for (const file of Array.from(fileList)) {
+            // Skip binary files, hidden files, node_modules
+            if (file.name.startsWith('.') || file.name === 'node_modules') continue;
+            const ext = file.name.split('.').pop()?.toLowerCase() || '';
+            const textExts = ['py', 'js', 'ts', 'tsx', 'jsx', 'java', 'go', 'rb', 'php', 'cs', 'c', 'cpp', 'rs',
+                'html', 'css', 'scss', 'json', 'xml', 'yaml', 'yml', 'md', 'sql', 'sh', 'bash', 'env', 'txt',
+                'tf', 'hcl', 'toml', 'cfg', 'ini', 'conf', 'dockerfile', 'gitignore', 'lock'];
+            if (!textExts.includes(ext) && ext.length > 0) continue;
+
+            try {
+                const content = await file.text();
+                if (content.length > 100000) continue; // skip very large files
+                // Use webkitRelativePath if available, otherwise just filename
+                const path = (file as any).webkitRelativePath || file.name;
+                uploadedFiles.push({ path, content });
+            } catch { /* skip unreadable files */ }
+        }
+
+        if (uploadedFiles.length === 0) return;
+
+        // Build tree from uploaded files
+        const newTree = buildFSTree(uploadedFiles);
+        setFileSystem(prev => [...prev, ...newTree]);
+
+        // Open first uploaded file
+        const allNewFiles = flattenFiles(newTree);
+        if (allNewFiles.length > 0) {
+            const first = allNewFiles[0];
+            setOpenTabs(prev => [...prev, first]);
+            setActiveTab(first.path);
+        }
+
+        setTerminalLines(prev => [
+            ...prev,
+            `\x1b[32m[+]\x1b[0m Uploaded ${uploadedFiles.length} files`,
+            ...uploadedFiles.slice(0, 10).map(f => `    ${f.path}`),
+            uploadedFiles.length > 10 ? `    ... and ${uploadedFiles.length - 10} more` : '',
+            '',
+        ].filter(Boolean));
+    }, []);
+
+    // ─── Drag and Drop ───────────────────────────────────────
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    }, []);
+
+    const handleDragLeave = useCallback(() => setIsDragging(false), []);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files.length > 0) {
+            handleFileUpload(e.dataTransfer.files);
+        }
+    }, [handleFileUpload]);
+
+    // ─── Scan Code ───────────────────────────────────────────
+    const scanCode = async () => {
+        const allFiles = flattenFiles(fileSystem);
+        if (allFiles.length === 0) {
+            setTerminalLines(prev => [...prev, '\x1b[31m[!]\x1b[0m No files to scan. Upload files first.', '']);
+            return;
+        }
+
+        setScanning(true);
+        setTerminalOpen(true);
+        setTerminalLines(prev => [
+            ...prev,
+            '═'.repeat(60),
+            '\x1b[32m[*]\x1b[0m Starting AI-powered security scan...',
+            `\x1b[32m[*]\x1b[0m Analyzing ${allFiles.length} files with Gemini AI`,
+            '',
+        ]);
+
+        try {
+            const response = await fetch('/api/scan/code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    files: allFiles.map(f => ({
+                        path: f.path,
+                        content: f.node.content || '',
+                        language: f.node.language || 'plaintext',
+                    })),
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Scan failed: ${response.status}`);
+            if (!response.body) throw new Error('No response body');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            if (data.type === 'progress') {
+                                setTerminalLines(prev => [...prev, `\x1b[33m[▸]\x1b[0m ${data.message}`]);
+                            } else if (data.type === 'complete') {
+                                const findings = data.findings || [];
+                                setTerminalLines(prev => {
+                                    const newLines = [
+                                        ...prev,
+                                        '',
+                                        '═'.repeat(60),
+                                        '\x1b[32m[✓]\x1b[0m SCAN COMPLETE',
+                                        '═'.repeat(60),
+                                        '',
+                                    ];
+
+                                    if (findings.length === 0) {
+                                        newLines.push('\x1b[32m[✓]\x1b[0m No vulnerabilities found!');
+                                    } else {
+                                        for (const f of findings) {
+                                            const sevColor = f.severity === 'critical' ? '\x1b[31m' :
+                                                f.severity === 'high' ? '\x1b[31m' :
+                                                    f.severity === 'medium' ? '\x1b[33m' :
+                                                        f.severity === 'low' ? '\x1b[36m' : '\x1b[90m';
+                                            newLines.push(`${sevColor}[${f.severity?.toUpperCase()}]\x1b[0m ${f.title}`);
+                                            newLines.push(`  ${f.endpoint} — ${f.description?.substring(0, 120)}`);
+                                            if (f.remediation) {
+                                                newLines.push(`  \x1b[32mFix: ${f.remediation?.substring(0, 120)}\x1b[0m`);
+                                            }
+                                            newLines.push('');
+                                        }
+
+                                        const crit = findings.filter((f: any) => f.severity === 'critical').length;
+                                        const high = findings.filter((f: any) => f.severity === 'high').length;
+                                        const med = findings.filter((f: any) => f.severity === 'medium').length;
+                                        const low = findings.filter((f: any) => f.severity === 'low').length;
+
+                                        newLines.push('─'.repeat(40));
+                                        newLines.push(`Critical: ${crit} | High: ${high} | Medium: ${med} | Low: ${low}`);
+                                        newLines.push(`Total findings: ${findings.length}`);
+                                    }
+
+                                    newLines.push('═'.repeat(60));
+                                    newLines.push('');
+                                    return newLines;
+                                });
+                            } else if (data.type === 'error') {
+                                setTerminalLines(prev => [...prev, `\x1b[31m[!]\x1b[0m ${data.message}`, '']);
+                            }
+                        } catch { /* skip unparseable */ }
+                    }
+                }
+            }
+        } catch (err) {
+            setTerminalLines(prev => [
+                ...prev,
+                `\x1b[31m[!]\x1b[0m Scan error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                '',
+            ]);
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    // ─── Terminal command handler ─────────────────────────────
+    const handleTerminalSubmit = () => {
+        if (!terminalInput.trim()) return;
+        const cmd = terminalInput.trim();
+        setTerminalLines(prev => [...prev, `\x1b[32m❯\x1b[0m ${cmd}`]);
+
+        if (cmd === 'clear') { setTerminalLines([]); }
+        else if (cmd === 'help') {
+            setTerminalLines(prev => [...prev,
+                'Commands:',
+                '  scan     — Run security scan on loaded files',
+                '  clear    — Clear terminal',
+                '  files    — List loaded files',
+                '  help     — Show this help',
+                ''
+            ]);
+        } else if (cmd === 'scan') { scanCode(); }
+        else if (cmd === 'files') {
+            const allFiles = flattenFiles(fileSystem);
+            setTerminalLines(prev => [...prev,
+            `${allFiles.length} files loaded:`,
+            ...allFiles.map(f => `  ${f.path}`),
+                ''
+            ]);
+        } else {
+            setTerminalLines(prev => [...prev, `\x1b[31mUnknown command:\x1b[0m ${cmd}. Type "help" for commands.`, '']);
+        }
+        setTerminalInput('');
+    };
+
     return (
         <div className="fixed inset-0 z-[200] bg-[#12141f] flex flex-col text-[#ccc]" style={{ fontFamily: "'IBM Plex Mono', 'Consolas', monospace" }}>
             {/* Title Bar */}
@@ -435,10 +485,24 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                 <div className="flex-1 text-center text-[13px] text-[#888]">
                     {activeTab || 'Darkmatter IDE'} — <span className="text-[#B6FF2E]">Darkmatter IDE</span>
                 </div>
-                <div className="flex gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-                    <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-                    <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+                <div className="flex items-center gap-3">
+                    {/* Scan Code Button */}
+                    <button
+                        onClick={scanCode}
+                        disabled={scanning}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[12px] font-semibold transition-all ${scanning
+                            ? 'bg-[#B6FF2E]/20 text-[#B6FF2E]/50 cursor-wait'
+                            : 'bg-gradient-to-r from-[#B6FF2E] to-[#8ed615] text-[#07080B] hover:brightness-110 shadow-[0_0_15px_rgba(182,255,46,0.2)]'
+                            }`}
+                    >
+                        {scanning ? <Loader2 size={13} className="animate-spin" /> : <Shield size={13} />}
+                        {scanning ? 'Scanning...' : '🛡️ Scan Code'}
+                    </button>
+                    <div className="flex gap-2">
+                        <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+                        <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+                        <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+                    </div>
                 </div>
             </div>
 
@@ -466,13 +530,67 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
 
                 {/* Sidebar */}
                 {sidebarOpen && (
-                    <div className="w-60 bg-[#12141f] border-r border-[#1e2030] flex flex-col shrink-0 overflow-hidden">
-                        <div className="px-4 py-2.5 text-[11px] font-semibold tracking-wider text-[#888] uppercase">Explorer</div>
+                    <div
+                        className={`w-60 bg-[#12141f] border-r border-[#1e2030] flex flex-col shrink-0 overflow-hidden ${isDragging ? 'ring-2 ring-[#B6FF2E] ring-inset' : ''}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                    >
+                        <div className="px-4 py-2.5 text-[11px] font-semibold tracking-wider text-[#888] uppercase flex items-center justify-between">
+                            Explorer
+                            <div className="flex gap-1">
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="text-[#888] hover:text-[#B6FF2E] transition-colors"
+                                    title="Upload Files"
+                                >
+                                    <Upload size={14} />
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        // Trigger folder upload
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.webkitdirectory = true;
+                                        input.multiple = true;
+                                        input.onchange = (e) => {
+                                            const files = (e.target as HTMLInputElement).files;
+                                            if (files) handleFileUpload(files);
+                                        };
+                                        input.click();
+                                    }}
+                                    className="text-[#888] hover:text-[#B6FF2E] transition-colors"
+                                    title="Upload Folder"
+                                >
+                                    <FolderUp size={14} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Hidden file input */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => {
+                                if (e.target.files) handleFileUpload(e.target.files);
+                                e.target.value = '';
+                            }}
+                        />
+
+                        {isDragging && (
+                            <div className="mx-2 mb-2 p-4 border-2 border-dashed border-[#B6FF2E]/50 rounded-lg text-center">
+                                <Upload size={24} className="text-[#B6FF2E] mx-auto mb-2" />
+                                <div className="text-[11px] text-[#B6FF2E]">Drop files here</div>
+                            </div>
+                        )}
+
                         <div className="px-3 py-1.5 text-[11px] font-semibold tracking-wider text-[#888] uppercase flex items-center gap-1">
-                            <ChevronDown size={12} /> DARKMATTER-SCANNER
+                            <ChevronDown size={12} /> PROJECT FILES
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                            {DEFAULT_FS.map((node) => (
+                            {fileSystem.map((node) => (
                                 <FileTreeNode key={node.name} node={node} depth={0} path="" onOpen={openFile} activeFile={activeTab} />
                             ))}
                         </div>
@@ -517,9 +635,17 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                             />
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-[#555]">
-                                <div className="text-6xl mb-6 opacity-20">⌨</div>
-                                <div className="text-xl font-display">Darkmatter IDE</div>
-                                <div className="text-sm mt-2">Open a file from the explorer to start editing</div>
+                                <div className="text-6xl mb-6 opacity-20">🛡️</div>
+                                <div className="text-xl font-display">Darkmatter Security IDE</div>
+                                <div className="text-sm mt-2 text-center max-w-md">
+                                    Upload your code files and click <span className="text-[#B6FF2E] font-bold">Scan Code</span> to find vulnerabilities
+                                </div>
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#B6FF2E]/10 border border-[#B6FF2E]/20 text-[#B6FF2E] hover:bg-[#B6FF2E]/20 transition-colors text-sm"
+                                >
+                                    <Upload size={16} /> Upload Files
+                                </button>
                             </div>
                         )}
                     </div>
@@ -527,7 +653,7 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                     {/* Terminal */}
                     {terminalOpen && (
                         <div className="h-[250px] border-t border-[#1e2030] shrink-0">
-                            <TerminalPanel />
+                            <TerminalPanel lines={terminalLines} input={terminalInput} setInput={setTerminalInput} onSubmit={handleTerminalSubmit} />
                         </div>
                     )}
                 </div>
@@ -537,7 +663,7 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
             <div className="h-6 bg-[#0a0c14] border-t border-[#1e2030] flex items-center px-3 text-[11px] shrink-0 select-none">
                 <div className="flex items-center gap-4 text-[#888]">
                     <span className="flex items-center gap-1"><GitBranch size={12} /> main</span>
-                    <span className="flex items-center gap-1"><CheckCircle size={12} className="text-[#28c840]" /> 0 errors</span>
+                    <span className="flex items-center gap-1"><CheckCircle size={12} className="text-[#28c840]" /> {flattenFiles(fileSystem).length} files</span>
                     <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setTerminalOpen(!terminalOpen)}>
                         <TerminalIcon size={12} /> Terminal
                     </span>
