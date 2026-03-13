@@ -184,8 +184,8 @@ function StatsSection() {
         <h2 className="font-display font-bold text-4xl lg:text-5xl text-center text-[#F4F6FF] mb-4">By The Numbers</h2>
         <p className="text-center text-[#A7ACBF] mb-16">Real-time operational metrics from our global infrastructure.</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-          {[{ n: 99, s: '.9%', l: 'Uptime SLA' }, { n: 2400000, s: '+', l: 'Threats Blocked' }, { n: 12, s: 'ms', l: 'Avg Latency' }, { n: 186, s: '', l: 'Countries Protected' }].map((d, i) => (
-            <div key={i} className="text-center p-8 card-glass"><CountUp target={d.n} suffix={d.s} /><div className="text-sm text-[#A7ACBF] mt-3 font-mono tracking-wider">{d.l}</div></div>
+          {[{ n: 15, s: '', p: '', l: 'Autonomous AI Agents' }, { n: 20, s: '+', p: '', l: 'Supported Recon Modules' }, { n: 8, s: '+', p: '', l: 'Vulnerability Classes Tested' }, { n: 5, s: ' sec', p: '<', l: 'Avg Scan Initialization' }].map((d, i) => (
+            <div key={i} className="text-center p-8 card-glass"><CountUp target={d.n} suffix={d.s} prefix={d.p} /><div className="text-sm text-[#A7ACBF] mt-3 font-mono tracking-wider">{d.l}</div></div>
           ))}
         </div>
       </div>
