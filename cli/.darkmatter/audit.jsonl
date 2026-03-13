@@ -1,0 +1,2 @@
+{"timestamp": 1773412688, "human_time": "Fri Mar 13 20:08:08 2026", "command": "init", "target": "localhost", "target_ip": "127.0.0.1", "attacker_ip": "150.129.131.181", "os": "nt", "metadata": {"user": "anonymous"}}
+{"timestamp": 1773412696, "human_time": "Fri Mar 13 20:08:16 2026", "command": "scan", "target": "https://juice-shop.herokuapp.com", "target_ip": "46.137.15.86", "attacker_ip": "150.129.131.181", "os": "nt", "metadata": {"profile": "full", "mode": "parallel"}}

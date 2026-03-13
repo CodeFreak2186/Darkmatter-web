@@ -229,9 +229,7 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                 es.close();
                 eventSourceRef.current = null;
 
-                const elapsed = data.completedAt
-                    ? ((data.completedAt - Date.now() + Date.now()) / 1000).toFixed(1)
-                    : '??';
+                const elapsed = data.duration || '??';
 
                 addLines([
                     { text: '', type: 'output' },
@@ -248,7 +246,7 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                     { text: '════════════════════════════════════════════════════════════', type: 'output' },
                     { text: '', type: 'output' },
                     { text: `  [+] Dashboard report:  /dashboard`, type: 'success' },
-                    { text: `  [+] Scan ID:           ${scanId}`, type: 'success' },
+                    { text: `  [+] Scan ID:           ${jobId}`, type: 'success' },
                     { text: '', type: 'output' },
                     { text: `${domain}@kali:~$`, type: 'output' },
                 ]);

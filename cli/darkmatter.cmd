@@ -1,2 +1,2 @@
 @echo off
-%~dp0darkmatter.exe %*
+python %~dp0darkmatter.py %*

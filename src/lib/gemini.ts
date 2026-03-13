@@ -17,7 +17,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-const MODEL_FALLBACKS = ['gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-2.0-flash-exp'];
+const MODEL = 'gemini-2.5-flash';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -262,31 +262,21 @@ Keep every string field concise. Total JSON must stay under 6000 tokens.`;
 // ─── Shared API call with model fallback ──────────────────────
 
 async function callWithFallback(prompt: string, maxTokens: number): Promise<string> {
-  let lastError: unknown = null;
-  for (const modelName of MODEL_FALLBACKS) {
-    try {
-      const response = await genAI.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: { temperature: 0.7, maxOutputTokens: maxTokens },
-      });
-      console.log(`[Batch] Using model: ${modelName}`);
-      return response.text ?? '';
-    } catch (modelErr) {
-      lastError = modelErr;
-      const msg = String(modelErr);
-      if (msg.includes('API_KEY_INVALID') || msg.includes('API key expired') || msg.includes('INVALID_ARGUMENT')) {
-        console.error('[Batch] ❌ Auth error — check your GEMINI_API_KEY in .env');
-        throw modelErr;
-      }
-      if (msg.includes('NOT_FOUND') || msg.includes('no longer available') || msg.includes('404')) {
-        console.warn(`[Batch] Model ${modelName} unavailable, trying next...`);
-        continue;
-      }
-      throw modelErr;
+  try {
+    const response = await genAI.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: { temperature: 0.7, maxOutputTokens: maxTokens },
+    });
+    console.log(`[Batch] Using model: ${MODEL}`);
+    return response.text ?? '';
+  } catch (err) {
+    const msg = String(err);
+    if (msg.includes('API_KEY_INVALID') || msg.includes('API key expired')) {
+      console.error('[Batch] ❌ Auth error — check your GEMINI_API_KEY in .env');
     }
+    throw err;
   }
-  throw lastError ?? new Error('All models failed');
 }
 
 // ─── Parse one agent from batch response ──────────────────────

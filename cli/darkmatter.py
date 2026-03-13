@@ -64,7 +64,7 @@ from core.tracker import DarkmatterTracker, ensure_initialized
 # ─── Setup ─────────────────────────────────────────────────────
 
 console = Console()
-MODEL_FALLBACKS = ["models/gemini-2.0-flash-lite", "models/gemini-2.0-flash", "models/gemini-2.5-flash"]
+MODEL = "models/gemini-2.5-flash"
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not API_KEY:
@@ -84,33 +84,23 @@ SEV_ICONS = {
     "critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "info": "⚪",
 }
 
-
 # ─── Gemini API ────────────────────────────────────────────────
 
 def call_gemini(label: str, prompt: str, max_tokens: int = 4096) -> str:
-    last_err = None
-    for model_name in MODEL_FALLBACKS:
-        try:
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=genai.types.GenerateContentConfig(
-                    temperature=0.7,
-                    max_output_tokens=max_tokens,
-                ),
-            )
-            console.print(f"  [dim]Using model: {model_name}[/]")
-            return resp.text or ""
-        except Exception as e:
-            last_err = e
-            msg = str(e)
-            if "API_KEY_INVALID" in msg or "API key expired" in msg:
-                raise
-            if "NOT_FOUND" in msg or "404" in msg:
-                console.print(f"  [dim]Model {model_name} unavailable, trying next...[/]")
-                continue
-            raise
-    raise last_err or Exception("All models failed")
+    try:
+        resp = client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        console.print(f"  [dim]Using model: {MODEL}[/]")
+        return resp.text or ""
+    except Exception as e:
+        console.print(f"  [bold red]Gemini Error ([/]{MODEL}[bold red]):[/] {e}")
+        raise
 
 
 def parse_json(raw: str) -> dict[str, Any]:
@@ -667,6 +657,9 @@ Examples:
     # log command
     sub.add_parser("log", help="View the Darkmatter audit log")
 
+    # restore command
+    sub.add_parser("restore", help="Restore access and unlock the system")
+
     # agent command
     at = sub.add_parser("agent", help="Mission-driven autonomous agent")
     at.add_argument("goal", help="The mission goal (e.g., 'Find vulnerabilities in X')")
@@ -703,7 +696,12 @@ Examples:
 
     args = parser.parse_args()
 
+    # Import Guardian here to avoid circular dependencies
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
+    from guardian import DarkmatterGuardian
+
     tracker = DarkmatterTracker()
+    guardian = DarkmatterGuardian(tracker.dm_dir)
 
     if args.command == "init":
         tracker.init_workspace(user_name=args.name, show_banner_callback=print_banner)
@@ -736,11 +734,27 @@ Examples:
                     console.print("-" * 40)
         return
 
+    if args.command == "restore":
+        guardian.unlock_system()
+        console.print("[bold green]✅ Access Restored.[/] Guardian Sentinel reset for testing.")
+        return
+
     # Check for initialization for all other commands
     if args.command in ["agent", "scan", "fuzz", "attack", "lifecycle"]:
         if not tracker.is_initialized():
             console.print("[bold red]✗ Error: Darkmatter Lab not initialized.[/]")
             console.print("You must run [bold cyan]python darkmatter.py init[/] before performing any operations.")
+            sys.exit(1)
+            
+        # 🕵️ Guardian Protection
+        recent = guardian.analyze_recent_activity()
+        if recent["status"] == "danger":
+            guardian.lock_system(recent["reason"])
+            
+        if not guardian.validate_target(getattr(args, "target", "")):
+            console.print(f"\n[bold red]🚨 SECURITY ALERT: System Restricted[/]")
+            console.print(f"[white]Reason: {guardian.analyze_recent_activity().get('reason', 'Security Violation')}[/]")
+            console.print(f"[dim]To restore access for testing, run the restore command.[/]\n")
             sys.exit(1)
 
     def ensure_http(url):
