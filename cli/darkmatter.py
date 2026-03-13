@@ -51,6 +51,11 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 from rich.text import Text
 from rich import box
 
+# Add engine to path
+engine_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "engine"))
+if engine_path not in sys.path:
+    sys.path.insert(0, engine_path)
+
 from agents import AGENTS, get_domain, build_batch_prompt
 from core.agent import RedTeamAgent
 from core.crawler import Crawler

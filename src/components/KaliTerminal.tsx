@@ -166,9 +166,9 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
         addLine('[Batch] Waiting for Gemini response...', 'output');
         addLine('', 'output');
 
-        // ── Fire the API call ──
+        // ── Fire the API call to Local FastAPI Backend ──
         try {
-            const res = await fetch('/api/scan/start', {
+            const res = await fetch('http://localhost:8000/api/scan/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ target: url, profile }),
@@ -176,35 +176,40 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
 
             if (!res.ok) {
                 const err = await res.json();
-                addLine(`[!] Scan failed to start: ${err.error || 'Unknown error'}`, 'error');
+                addLine(`[!] Backend failed: ${err.message || 'Check if FastAPI is running (port 8000)'}`, 'error');
                 setScanRunning(false);
                 return;
             }
 
-            const { scanId } = await res.json();
+            const { jobId } = await res.json();
 
-            // ── Stream SSE results live ──
-            const es = new EventSource(`/api/scan/${scanId}/stream`);
+            // ── Stream SSE results live from FastAPI ──
+            const es = new EventSource(`http://localhost:8000/api/scan/stream/${jobId}?target=${encodeURIComponent(url)}&profile=${profile}`);
             eventSourceRef.current = es;
 
             const agentFindingCounts: Record<string, number> = {};
 
+            es.addEventListener('terminal', (e) => {
+                const data = JSON.parse(e.data);
+                addLine(`[${data.phase}] ${data.log}`, 'output');
+            });
+
             es.addEventListener('finding', (e) => {
                 const f = JSON.parse(e.data);
                 const sev = f.severity?.toUpperCase() || 'INFO';
-                const cve = f.cve ? ` (${f.cve})` : '';
-                const agent = f.agent || 'Unknown';
+                const agent = f.agent || 'Fuzzer';
                 agentFindingCounts[agent] = (agentFindingCounts[agent] || 0) + 1;
 
                 const type: TermLine['type'] = (sev === 'CRITICAL' || sev === 'HIGH') ? 'error'
                     : sev === 'MEDIUM' ? 'info' : 'output';
-                addLine(`  [${sev}] ${f.title}${cve} — ${f.endpoint}`, type);
+
+                addLine(`[DETECT] ${sev}: ${f.title} @ ${f.endpoint}`, type);
             });
 
             es.addEventListener('agent_report', (e) => {
                 const report = JSON.parse(e.data);
-                const count = agentFindingCounts[report.agentName] || report.findings?.length || 0;
-                addLine(`[${report.agentName}] ✓ ${count} findings parsed from batch`, 'success');
+                const count = agentFindingCounts[report.agentName] || 0;
+                addLine(`[${report.agentName}] ✓ Done`, 'success');
             });
 
             es.addEventListener('port', (e) => {
