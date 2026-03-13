@@ -38,6 +38,8 @@ from rich.text import Text
 from rich import box
 
 from agents import AGENTS, get_domain, build_batch_prompt
+from core.agent import RedTeamAgent
+from core.crawler import Crawler
 
 # ─── Setup ─────────────────────────────────────────────────────
 
@@ -130,12 +132,12 @@ def run_single_agent(idx: int, target: str, domain: str, profile: str) -> dict[s
 
 # ─── Batch mode (1 API call) ──────────────────────────────────
 
-def run_batch(target: str, domain: str, profile: str) -> list[dict[str, Any]]:
+def run_batch(target: str, domain: str, profile: str, context: str = "") -> list[dict[str, Any]]:
     console.print(f"[bold yellow]  ⏳ Sending 1 batched request for all {len(AGENTS)} agents...[/]")
     console.print()
 
     start = time.time()
-    prompt = build_batch_prompt(target, domain, profile)
+    prompt = build_batch_prompt(target, domain, profile, context=context)
     raw = call_gemini("Batch", prompt, max_tokens=16384)
     elapsed = time.time() - start
 
@@ -478,25 +480,31 @@ def run_fuzz(target: str, profile: str = "full", rps: float = 10.0, auth_token: 
 
 # ─── Main ──────────────────────────────────────────────────────
 
-def run_scan(target: str, profile: str = "full", mode: str = "batch", print_banner_flag: bool = True):
+async def run_scan(target: str, profile: str = "full", mode: str = "batch", print_banner_flag: bool = True):
     domain = get_domain(target)
     if print_banner_flag:
         print_banner()
 
-    console.rule("[bold green]SCAN INITIATED", style="green")
+    console.rule("[bold green]SCAN INITIATED (REAL RECON + AI ANALYSIS)", style="green")
     console.print(f"  [bold white]Target:[/]  {target}")
     console.print(f"  [bold white]Domain:[/]  {domain}")
-    console.print(f"  [bold white]Profile:[/] {profile}")
-    console.print(f"  [bold white]Mode:[/]    {mode} ({'1 API call' if mode == 'batch' else f'{len(AGENTS)} parallel API calls'})")
+    
+    # NEW: Run real crawler first to avoid "shit" hallucinations
+    crawler = Crawler(max_depth=1 if profile == "quick" else 2)
+    with console.status("[bold yellow]🕷️ Performing real reconnaissance crawl..."):
+        surface = await crawler.crawl(target)
+    
+    console.print(f"  [bold green]✓ Found {len(surface.endpoints)} real endpoints and {len(surface.technologies)} technologies.[/]")
     console.print()
 
     print_agent_commands(target, domain, profile)
 
     start = time.time()
+    context_data = str(surface.endpoints[:10]) + str(surface.technologies)
     if mode == "parallel":
-        results = run_parallel(target, domain, profile)
+        results = run_parallel(target, domain, profile) # parallel doesn't use batch prompt context yet but we could add it
     else:
-        results = run_batch(target, domain, profile)
+        results = run_batch(target, domain, profile, context=context_data)
     elapsed = time.time() - start
 
     console.print()
@@ -615,17 +623,24 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  scan       AI-powered security scan (simulated tool output via Gemini)
+  agent      TRULY AUTONOMOUS Agent (Analyses code, runs tools, executes scripts)
+  scan       AI-powered security scan (informed by real recon)
   fuzz       Real active fuzzing (crawl + classify + inject payloads + detect)
   attack     Complete lifecycle (scan + fuzz combined)
   lifecycle  4-Phase Rigorous Pentest Lifecycle (Recon -> Vuln Analysis -> Exploit -> Report)
 
 Examples:
+  python darkmatter.py agent "Analyze the security of https://example.com and find SQLi"
   python darkmatter.py scan https://example.com
   python darkmatter.py lifecycle https://example.com --profile quick
         """,
     )
     sub = parser.add_subparsers(dest="command")
+
+    # agent command
+    at = sub.add_parser("agent", help="Mission-driven autonomous agent")
+    at.add_argument("goal", help="The mission goal (e.g., 'Find vulnerabilities in X')")
+    at.add_argument("--target", required=True, help="Target URL")
 
     # scan command
     sp = sub.add_parser("scan", help="AI-powered security scan via Gemini")
@@ -664,8 +679,13 @@ Examples:
             return f"https://{url}"
         return url
 
-    if args.command == "scan":
-        run_scan(ensure_http(args.target), args.profile, args.mode)
+    if args.command == "agent":
+        agent = RedTeamAgent(api_key=API_KEY)
+        import asyncio
+        asyncio.run(agent.execute_mission(args.goal, args.target))
+    elif args.command == "scan":
+        import asyncio
+        asyncio.run(run_scan(ensure_http(args.target), args.profile, args.mode))
     elif args.command == "fuzz":
         run_fuzz(ensure_http(args.target), args.profile, args.rps, args.auth_token)
     elif args.command == "attack":
