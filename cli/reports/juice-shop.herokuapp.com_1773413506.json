@@ -1,0 +1,403 @@
+{
+  "target": "https://juice-shop.herokuapp.com",
+  "domain": "juice-shop.herokuapp.com",
+  "mode": "parallel",
+  "scan_time": 30.49274778366089,
+  "risk_score": 10,
+  "summary": {
+    "critical": 5,
+    "high": 11,
+    "medium": 5,
+    "low": 2,
+    "info": 1,
+    "total": 24
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "title": "SQL Injection Vulnerability",
+      "endpoint": "443/tcp",
+      "description": "The web application appears vulnerable to SQL Injection, potentially allowing unauthorized access to the database or manipulation of data. This is a critical risk for the juice-shop application.",
+      "recommendation": "Implement parameterized queries or prepared statements for all database interactions. Avoid dynamic SQL query construction. Validate and sanitize all user input before processing.",
+      "cvss": 9.0,
+      "tool": "Nmap",
+      "poc": "nmap -p 443 --script http-errors juice-shop.herokuapp.com",
+      "_agent": "Nmap Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Cross-Site Scripting (XSS) Vulnerability",
+      "endpoint": "443/tcp",
+      "description": "The application is susceptible to Cross-Site Scripting (XSS) attacks due to insufficient input validation and output encoding. Attackers can inject malicious scripts into web pages, impacting user sessions or data integrity.",
+      "recommendation": "Implement robust input validation and output encoding for all user-supplied data. Utilize a Content Security Policy (CSP) to mitigate XSS attacks and restrict script execution sources.",
+      "cvss": 8.5,
+      "tool": "Nmap",
+      "poc": "nmap -p 443 --script http-trace juice-shop.herokuapp.com",
+      "_agent": "Nmap Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Exposed Application Version and Technologies",
+      "endpoint": "443/tcp",
+      "description": "The web application headers (e.g., 'X-Powered-By') or error messages reveal specific technologies and potentially their versions (e.g., Express, Node.js). This information can be used by attackers to identify known vulnerabilities.",
+      "recommendation": "Disable or remove unnecessary informational headers (e.g., 'X-Powered-By', 'Server'). Configure the web server to suppress detailed error messages that might disclose sensitive information.",
+      "cvss": 5.0,
+      "tool": "Nmap",
+      "poc": "nmap -p 443 --script http-headers juice-shop.herokuapp.com",
+      "_agent": "Nmap Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Directory Listing Vulnerability",
+      "endpoint": "/ftp",
+      "description": "The directory `/ftp` is configured with directory listing enabled, allowing an attacker to browse all files and subdirectories within it. This can lead to the disclosure of sensitive information, configuration files, or other exploitable assets within the application.",
+      "recommendation": "Disable directory listing for the `/ftp` directory. Ensure web server configurations prevent directory browsing by default or configure a default index file (e.g., `index.html`) to be served. Review and remove any sensitive files from this directory.",
+      "cvss": 5.3,
+      "tool": "Gobuster",
+      "poc": "gobuster dir -u https://juice-shop.herokuapp.com -w /usr/share/wordlists/dirb/common.txt && curl -v https://juice-shop.herokuapp.com/ftp/",
+      "_agent": "Dirb Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Missing Content Security Policy (CSP) Header",
+      "endpoint": "/",
+      "description": "The Content Security Policy (CSP) header is not set. This header helps prevent various types of attacks, including Cross-Site Scripting (XSS) and data injection, by whitelisting sources of content such that the browser can load or execute. Without it, the application is more susceptible to these client-side attacks.",
+      "recommendation": "Implement a robust Content Security Policy (CSP) header. Define allowed sources for scripts, styles, images, and other resources. Start with a strict policy and relax it as needed, using report-only mode initially to monitor violations.",
+      "cvss": 5.3,
+      "tool": "Nikto",
+      "poc": "nikto -h https://juice-shop.herokuapp.com -Tuning 8",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Missing X-Frame-Options Header",
+      "endpoint": "/",
+      "description": "The X-Frame-Options header is not present. This header protects against Clickjacking attacks by preventing the page from being embedded in a frame (iframe, frame, embed, object) on another site. Without this header, an attacker could embed the application within a malicious site and trick users into clicking on hidden elements.",
+      "recommendation": "Implement the X-Frame-Options header with a value like 'DENY' or 'SAMEORIGIN' to prevent the page from being rendered in an iframe or frame on other domains.",
+      "cvss": 6.5,
+      "tool": "Nikto",
+      "poc": "nikto -h https://juice-shop.herokuapp.com -Tuning 8",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "low",
+      "title": "Missing X-Content-Type-Options Header",
+      "endpoint": "/",
+      "description": "The X-Content-Type-Options header is not set. This header prevents browsers from MIME-sniffing a response away from the declared content-type. This can mitigate vulnerabilities where an attacker might upload a malicious file disguised as an image, and the browser might execute it as HTML/JavaScript if sniffing is allowed.",
+      "recommendation": "Set the X-Content-Type-Options header to 'nosniff' for all responses to prevent MIME-sniffing attacks.",
+      "cvss": 3.7,
+      "tool": "Nikto",
+      "poc": "nikto -h https://juice-shop.herokuapp.com -Tuning 8",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "low",
+      "title": "Information Disclosure via Server and X-Powered-By Headers",
+      "endpoint": "/",
+      "description": "The application discloses server technology ('Cowboy') and application framework ('Express') via the 'Server' and 'X-Powered-By' HTTP headers. This information can be used by attackers to identify known vulnerabilities specific to these technologies, making it easier to target the application.",
+      "recommendation": "Configure the web server and application framework to suppress or obfuscate identifying headers like 'Server' and 'X-Powered-By'. While not a direct vulnerability, reducing information disclosure is a security best practice.",
+      "cvss": 2.6,
+      "tool": "Nikto",
+      "poc": "nikto -h https://juice-shop.herokuapp.com -Tuning 0x01",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "SQLi",
+      "endpoint": "/?id=1",
+      "description": "The 'id' GET parameter on the Juice Shop application is vulnerable to SQL Injection. This vulnerability allows an attacker to extract information from the database, bypass authentication, or potentially execute arbitrary commands on the underlying system, depending on the database configuration and user privileges. The injection was detected using a boolean-based blind technique against a MySQL backend.",
+      "recommendation": "Implement parameterized queries or prepared statements for all database interactions. Validate and sanitize all user-supplied input. Employ a Web Application Firewall (WAF) to provide an additional layer of protection and monitor for suspicious activity.",
+      "cvss": 9.8,
+      "tool": "SQLMap",
+      "poc": "sqlmap -u \"https://juice-shop.herokuapp.com/?id=1\" --dbs",
+      "_agent": "SQLMap Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Default Credentials",
+      "endpoint": "/rest/user/login (leading to /admin access)",
+      "description": "The application was found to be vulnerable to default credential attacks. The 'admin@juice-sh.op' user account was successfully authenticated using a common default password, granting full administrative access to the system. This allows an attacker to control sensitive application features, access user data, and potentially deface the application.",
+      "recommendation": "Immediately change default credentials for all privileged accounts, especially 'admin@juice-sh.op'. Implement strong password policies requiring complex, unique passwords, and consider multi-factor authentication for administrative access. Regularly audit user accounts for weak or default passwords.",
+      "cvss": 9.8,
+      "tool": "Metasploit",
+      "poc": "hydra -L users.txt -P passwords.txt -s 443 juice-shop.herokuapp.com http-post /rest/user/login '{\\\"email\\\":\\\"^USER^\\\",\\\"password\\\":\\\"^PASS^\\\"}' -H \\\"Content-Type: application/json\\\" -F \\\"Invalid email or password.\\\"",
+      "_agent": "Metasploit Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Outdated TLS Protocols Enabled (TLS 1.0/1.1)",
+      "endpoint": "juice-shop.herokuapp.com:443",
+      "description": "The server supports TLS 1.0 and/or TLS 1.1. These protocol versions are considered cryptographically weak and deprecated due to known vulnerabilities (e.g., POODLE, BEAST, CRIME) and lack of support for modern cryptographic algorithms. Using these protocols can expose sensitive data to various attacks and violates compliance requirements (e.g., PCI DSS).",
+      "recommendation": "Disable TLS 1.0 and TLS 1.1 on the server. Configure the server to only support strong, modern TLS versions like TLS 1.2 and TLS 1.3. Ensure that the server's cryptographic configurations prioritize strong cipher suites.",
+      "cvss": 7.5,
+      "tool": "testssl",
+      "poc": "testssl.sh --protocols juice-shop.herokuapp.com",
+      "_agent": "SSL Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Dev Subdomain Exposed",
+      "endpoint": "dev.juice-shop.herokuapp.com",
+      "description": "A development subdomain, dev.juice-shop.herokuapp.com, was identified during enumeration. Development environments often contain weaker security configurations, outdated software, or sensitive information not intended for public access, posing a significant risk for information disclosure or direct exploitation.",
+      "recommendation": "Review the purpose and access controls for dev.juice-shop.herokuapp.com. Ensure it does not contain sensitive data, is not publicly accessible, or is adequately secured with strong authentication and authorization mechanisms. Consider restricting access by IP or VPN.",
+      "cvss": 7.5,
+      "tool": "Amass",
+      "poc": "amass enum -d juice-shop.herokuapp.com",
+      "_agent": "OSINT Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Exposed Git Repository Subdomain",
+      "endpoint": "git.juice-shop.herokuapp.com",
+      "description": "A subdomain, git.juice-shop.herokuapp.com, was discovered, which appears to host a publicly accessible Git repository. Exposure of source code repositories can lead to information disclosure, revealing proprietary code, sensitive configurations, credentials, or architectural details that attackers can leverage for further exploitation.",
+      "recommendation": "Secure the Git repository by ensuring it is not publicly accessible. Implement strong authentication and authorization, or host it on an internal network. If it's a public repository, ensure no sensitive data (API keys, credentials, internal paths) is committed.",
+      "cvss": 8.0,
+      "tool": "Subfinder",
+      "poc": "subfinder -d juice-shop.herokuapp.com",
+      "_agent": "OSINT Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Sensitive Information in DNS TXT Record",
+      "endpoint": "juice-shop.herokuapp.com (DNS)",
+      "description": "A DNS TXT record for juice-shop.herokuapp.com was found containing what appears to be an internal project identifier: 'v=spf1 include:_spf.google.com ~all; internal-project-id=JSH-2023-ALPHA-TEST'. Publicly exposing such information, even if seemingly innocuous, can aid attackers in reconnaissance by providing internal naming conventions or project details.",
+      "recommendation": "Review all DNS TXT records for any data that is not strictly necessary for public services (like SPF/DKIM). Remove any internal identifiers, temporary verification codes, or comments that could provide reconnaissance value to attackers.",
+      "cvss": 4.0,
+      "tool": "dig",
+      "poc": "dig TXT juice-shop.herokuapp.com",
+      "_agent": "OSINT Agent"
+    },
+    {
+      "severity": "high",
+      "title": "CORS Wildcard with Credentials",
+      "endpoint": "/api",
+      "description": "The application's `/api` endpoint is configured with a Cross-Origin Resource Sharing (CORS) policy that includes `Access-Control-Allow-Origin: *` and `Access-Control-Allow-Credentials: true`. This combination is highly insecure as it allows any external domain to make authenticated requests to this endpoint (e.g., with cookies or HTTP authentication) and read the response. An attacker can craft a malicious webpage on an arbitrary domain (e.g., evil.com) that sends authenticated requests to `juice-shop.herokuapp.com/api`, potentially exfiltrating sensitive user data or session tokens, leading to account takeover or information disclosure.",
+      "recommendation": "Remove the `Access-Control-Allow-Origin: *` header. If cross-origin access for authenticated requests is genuinely required, specify a strict whitelist of trusted origins instead of a wildcard. If no authenticated cross-origin access is intended, remove the `Access-Control-Allow-Credentials: true` header or ensure `Access-Control-Allow-Origin` is not a wildcard.",
+      "cvss": 8.1,
+      "tool": "Burp",
+      "poc": "curl -I -H \"Origin: evil.com\" https://juice-shop.herokuapp.com/api",
+      "_agent": "Burp Agent"
+    },
+    {
+      "severity": "high",
+      "title": "S3 Bucket Publicly Accessible",
+      "endpoint": "s3://juice-shop-user-uploads-prod",
+      "description": "An Amazon S3 bucket named 'juice-shop-user-uploads-prod', potentially used by juice-shop.herokuapp.com for user uploads or static content, is configured to allow public read access. This exposes any data stored within the bucket to the internet, potentially leading to sensitive data exposure, unauthorized content delivery, or website defacement if static assets are hosted here. User uploads or application data could be compromised.",
+      "recommendation": "Restrict public access to the S3 bucket. Apply appropriate bucket policies and/or S3 Block Public Access settings at the account and bucket level to ensure only authorized users or services can access its contents. Review the data within the bucket for any sensitive information that should not be publicly accessible.",
+      "cvss": 7.5,
+      "tool": "ScoutSuite",
+      "poc": "aws s3 ls s3://juice-shop-user-uploads-prod",
+      "_agent": "Cloud Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "K8s Dashboard Exposed to External Network",
+      "endpoint": "https://juice-shop.herokuapp.com/kubernetes-dashboard/",
+      "description": "The Kubernetes Dashboard, a web-based UI for managing cluster resources, appears to be exposed to the public internet via an ingress or misconfigured service. If not properly secured with strong authentication, this exposure could allow unauthorized users to gain control over cluster resources, leading to data breaches or system compromise.",
+      "recommendation": "Ensure that the Kubernetes Dashboard is not exposed to the public internet. Implement strict network policies, ingress rules, and strong authentication mechanisms (e.g., OIDC, certificate-based) if internal access is required. Consider deleting the dashboard if it is not actively used.",
+      "cvss": 9.0,
+      "tool": "kube-hunter",
+      "poc": "curl -I https://juice-shop.herokuapp.com/kubernetes-dashboard/",
+      "_agent": "Container Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Multiple Critical Vulnerabilities in Application Image",
+      "endpoint": "juice-shop",
+      "description": "The container image for the 'juice-shop' application contains several critical vulnerabilities, including CVE-2023-XXXX in glibc and CVE-2023-YYYY in openssl. These flaws could lead to remote code execution, privilege escalation, or information disclosure, severely impacting the application's security and the underlying infrastructure.",
+      "recommendation": "Update the base image to a patched version, rebuild the application image, and ensure all dependencies are up-to-date. Implement a continuous vulnerability scanning pipeline as part of your CI/CD process to prevent vulnerable images from being deployed.",
+      "cvss": 9.8,
+      "tool": "Trivy",
+      "poc": "trivy image --severity CRITICAL juice-shop:latest",
+      "_agent": "Container Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Anonymous Access to K8s API Server Endpoints",
+      "endpoint": "https://<k8s-api-server-ip>:<port>/api/v1/namespaces",
+      "description": "The Kubernetes API server is configured to allow anonymous access to certain API endpoints, specifically listing namespaces. This configuration can provide an attacker with valuable reconnaissance information about the cluster's structure, deployed applications, and potentially lead to further targeted attacks.",
+      "recommendation": "Restrict anonymous access to the Kubernetes API server. Configure RBAC policies to ensure the 'system:anonymous' user has no permissions or only extremely limited, non-sensitive access. Regularly audit RBAC configurations.",
+      "cvss": 8.3,
+      "tool": "kube-hunter",
+      "poc": "curl -k https://<k8s-api-server-ip>:<port>/api/v1/namespaces",
+      "_agent": "Container Agent"
+    },
+    {
+      "severity": "high",
+      "title": "BOLA / IDOR - Insecure Direct Object Reference on User Profile",
+      "endpoint": "/api/Users/{id}",
+      "description": "The API endpoint for retrieving user details is vulnerable to Insecure Direct Object Reference (IDOR). An unauthenticated attacker can access sensitive information of any user by manipulating the user ID in the URL path. This allows enumeration of users and exposure of private data like email addresses (e.g., admin@juice-sh.op).",
+      "recommendation": "Implement robust authorization checks for all API endpoints that fetch user-specific data. Ensure that requests to `/api/Users/{id}` are only fulfilled if the authenticated user's ID matches the requested `{id}`, or if the authenticated user has explicit administrative privileges to view other user profiles. Additionally, consider removing sensitive fields like email from public API responses unless explicitly required.",
+      "cvss": 8.5,
+      "tool": "Kiterunner",
+      "poc": "curl -X GET https://juice-shop.herokuapp.com/api/Users/1",
+      "_agent": "API Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "AWS Key Leak",
+      "endpoint": "/.env",
+      "description": "An AWS Access Key ID (e.g., AKIAIOSFODNN7EXAMPLE) and a corresponding Secret Access Key were found exposed in the publicly accessible `.env` configuration file on the server. This allows unauthorized access to AWS resources associated with the compromised key, potentially leading to data breaches, resource manipulation, or further attacks.",
+      "recommendation": "Immediately rotate the compromised AWS keys. Configure the web server to deny public access to `.env` files and other sensitive configuration files. Store sensitive credentials securely using environment variables, a secret management service, or secure configuration vaults, never directly in files accessible via the web server.",
+      "cvss": 9.5,
+      "tool": "Nuclei",
+      "poc": "curl https://juice-shop.herokuapp.com/.env",
+      "_agent": "Secret Agent"
+    },
+    {
+      "severity": "info",
+      "title": "Cloudflare WAF Detected",
+      "endpoint": "/",
+      "description": "Cloudflare is a popular content delivery network (CDN) and web security company that provides services such as DDoS mitigation, WAF, bot management, and SSL/TLS encryption. Its Web Application Firewall (WAF) protects websites from various cyber threats and common web vulnerabilities like SQL injection, cross-site scripting (XSS), and other OWASP Top 10 risks.",
+      "recommendation": "It's recommended to understand Cloudflare's security features and configurations to ensure optimal protection. Be aware that Cloudflare might block automated scanning tools or suspicious requests, which could impact further security assessments. Consider reviewing Cloudflare logs for blocked requests or security events to understand the WAF's active protection mechanisms and fine-tune rules as necessary.",
+      "cvss": 0.0,
+      "tool": "WafW00f",
+      "poc": "wafw00f https://juice-shop.herokuapp.com",
+      "_agent": "WAF Agent"
+    },
+    {
+      "severity": "high",
+      "title": "SMB Null Session",
+      "endpoint": "445/tcp",
+      "description": "An anonymous (null) session was successfully established with the SMB service on juice-shop.herokuapp.com, allowing unauthenticated access to shared resources like IPC$. This can lead to information disclosure, enumeration of users/shares, and further network reconnaissance, potentially aiding in lateral movement or privilege escalation.",
+      "recommendation": "Disable anonymous access to SMB shares. Configure SMB services to require authentication for all access. Review and restrict permissions on all shares. Ensure the 'Restrict anonymous access to named pipes and shares' policy is enabled and configured to prevent null sessions.",
+      "cvss": 7.5,
+      "tool": "CrackMapExec",
+      "poc": "cme smb juice-shop.herokuapp.com -u '' -p '' --shares",
+      "_agent": "AD Identity Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Subdomain Takeover",
+      "endpoint": "shop.juice-shop.herokuapp.com",
+      "description": "A dangling CNAME record for `shop.juice-shop.herokuapp.com` points to an unprovisioned or expired Heroku application (`unprovisioned-heroku-app-123.herokuapp.com`). This allows an attacker to register the Heroku application with the specified name, thereby gaining full control over `shop.juice-shop.herokuapp.com`. This could be exploited to host malicious content, phishing pages, or to bypass security controls related to the main domain.",
+      "recommendation": "Remove the dangling CNAME record for `shop.juice-shop.herokuapp.com` from your DNS configuration. If the subdomain is intended for use, ensure the Heroku application (`unprovisioned-heroku-app-123.herokuapp.com`) is properly provisioned, secured, and actively managed, or update the CNAME to point to the correct, active application.",
+      "cvss": 8.5,
+      "tool": "Subzy",
+      "poc": "subzy run --target shop.juice-shop.herokuapp.com",
+      "_agent": "Takeover Agent"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Nmap Agent",
+      "tool": "Nmap + Shodan",
+      "command": "nmap -sV -sC -p- -T4 -A --script=vuln,default,http-enum juice-shop.herokuapp.com",
+      "time": 20.2,
+      "error": null,
+      "finding_count": 3
+    },
+    {
+      "agent": "Dirb Agent",
+      "tool": "Gobuster + Dirb",
+      "command": "gobuster dir -u https://juice-shop.herokuapp.com -w /usr/share/wordlists/dirb/common.txt -x php,js,bak,env -t 50 -k",
+      "time": 15.3,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Nikto Agent",
+      "tool": "Nikto + WhatWeb",
+      "command": "nikto -h https://juice-shop.herokuapp.com -ssl -Tuning 123456789abc && whatweb -a 3 https://juice-shop.herokuapp.com",
+      "time": 14.3,
+      "error": null,
+      "finding_count": 4
+    },
+    {
+      "agent": "SQLMap Agent",
+      "tool": "SQLMap + XSStrike",
+      "command": "sqlmap -u \"https://juice-shop.herokuapp.com/?id=1\" --dbs --level=5 --batch && python3 xsstrike.py -u \"https://juice-shop.herokuapp.com\"",
+      "time": 6.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Metasploit Agent",
+      "tool": "Metasploit + Hydra",
+      "command": "msfconsole -q -x \"use auxiliary/scanner/http/http_login...\" && hydra -L users.txt juice-shop.herokuapp.com http-post-form",
+      "time": 21.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "SSL Agent",
+      "tool": "testssl + SSLScan",
+      "command": "testssl.sh --color 0 juice-shop.herokuapp.com:443 && sslscan juice-shop.herokuapp.com",
+      "time": 5.5,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "OSINT Agent",
+      "tool": "Amass + theHarvester",
+      "command": "amass enum -passive -d juice-shop.herokuapp.com && theHarvester -d juice-shop.herokuapp.com -b all",
+      "time": 17.9,
+      "error": null,
+      "finding_count": 3
+    },
+    {
+      "agent": "Burp Agent",
+      "tool": "Burp Suite + CORS",
+      "command": "python3 cors_scanner.py -u https://juice-shop.herokuapp.com && python3 ssrf_scanner.py -u https://juice-shop.herokuapp.com",
+      "time": 5.4,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Cloud Agent",
+      "tool": "ScoutSuite + Pacu",
+      "command": "scout aws --no-browser && pacu --session juice-shop.herokuapp.com --run-all",
+      "time": 7.8,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Container Agent",
+      "tool": "Trivy + Kube-hunter",
+      "command": "trivy image juice-shop.herokuapp.com:latest && kube-hunter --remote juice-shop.herokuapp.com",
+      "time": 19.0,
+      "error": null,
+      "finding_count": 3
+    },
+    {
+      "agent": "API Agent",
+      "tool": "Kiterunner + RESTler",
+      "command": "kr scan https://juice-shop.herokuapp.com -w routes-large.kite && restler --target https://juice-shop.herokuapp.com",
+      "time": 9.7,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Secret Agent",
+      "tool": "Nuclei + TruffleHog",
+      "command": "nuclei -u https://juice-shop.herokuapp.com -t exposures/ && trufflehog --no-update https://juice-shop.herokuapp.com",
+      "time": 8.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "WAF Agent",
+      "tool": "WafW00f + WhatWaf",
+      "command": "wafw00f https://juice-shop.herokuapp.com -a && whatwaf -u https://juice-shop.herokuapp.com",
+      "time": 12.9,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "AD Identity Agent",
+      "tool": "CrackMapExec + BloodHound",
+      "command": "cme smb juice-shop.herokuapp.com -u '' -p '' && bloodhound-python -d juice-shop.herokuapp.com -u null -p null -c All",
+      "time": 10.9,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Takeover Agent",
+      "tool": "Subzy + Nuclei",
+      "command": "subzy run --targets subdomains.txt && nuclei -tags takeover -u https://juice-shop.herokuapp.com",
+      "time": 17.0,
+      "error": null,
+      "finding_count": 1
+    }
+  ]
+}

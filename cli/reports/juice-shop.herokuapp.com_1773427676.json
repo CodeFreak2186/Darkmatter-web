@@ -1,0 +1,195 @@
+{
+  "target": "https://juice-shop.herokuapp.com",
+  "domain": "juice-shop.herokuapp.com",
+  "mode": "parallel",
+  "scan_time": 20.153667449951172,
+  "risk_score": 2.9,
+  "startedAt": 1773427656682,
+  "completedAt": 1773427676835,
+  "summary": "Cloud scan of https://juice-shop.herokuapp.com complete. Found 0 critical and 1 high vulnerabilities.",
+  "findings": [
+    {
+      "name": "Missing Content-Security-Policy (CSP) Header",
+      "description": "The Content-Security-Policy (CSP) header is not set. This header helps prevent a wide range of attacks, including Cross-Site Scripting (XSS) and data injection, by whitelisting trusted content sources.",
+      "severity": "Medium",
+      "confidence": "confirmed",
+      "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+      "technical_evidence": {
+        "url": "https://juice-shop.herokuapp.com",
+        "method": "GET",
+        "status_code": 200,
+        "missing_header": "Content-Security-Policy",
+        "scanner_output": "The HTTP response did not contain the 'Content-Security-Policy' header."
+      },
+      "_agent": "Header Agent"
+    },
+    {
+      "name": "Missing X-Frame-Options Header",
+      "description": "The X-Frame-Options header is not set. This header prevents clickjacking attacks by controlling whether a browser can render a page in a <frame>, <iframe>, <embed>, or <object> tag.",
+      "severity": "Medium",
+      "confidence": "confirmed",
+      "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+      "technical_evidence": {
+        "url": "https://juice-shop.herokuapp.com",
+        "method": "GET",
+        "status_code": 200,
+        "missing_header": "X-Frame-Options",
+        "scanner_output": "The HTTP response did not contain the 'X-Frame-Options' header."
+      },
+      "_agent": "Header Agent"
+    },
+    {
+      "name": "Missing Referrer-Policy Header",
+      "description": "The Referrer-Policy header is not set. This header controls how much referrer information (URL of the previous page) should be included with requests. Without it, sensitive information might be leaked to third parties.",
+      "severity": "Low",
+      "confidence": "confirmed",
+      "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+      "technical_evidence": {
+        "url": "https://juice-shop.herokuapp.com",
+        "method": "GET",
+        "status_code": 200,
+        "missing_header": "Referrer-Policy",
+        "scanner_output": "The HTTP response did not contain the 'Referrer-Policy' header."
+      },
+      "_agent": "Header Agent"
+    },
+    {
+      "name": "Missing Permissions-Policy Header",
+      "description": "The Permissions-Policy (formerly Feature-Policy) header is not set. This header allows a site to control which browser features are available to itself and to embedded iframes, enhancing security by restricting potentially dangerous APIs.",
+      "severity": "Low",
+      "confidence": "confirmed",
+      "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+      "technical_evidence": {
+        "url": "https://juice-shop.herokuapp.com",
+        "method": "GET",
+        "status_code": 200,
+        "missing_header": "Permissions-Policy",
+        "scanner_output": "The HTTP response did not contain the 'Permissions-Policy' header."
+      },
+      "_agent": "Header Agent"
+    },
+    {
+      "vulnerability": "Broken Access Control (IDOR - Insecure Direct Object Reference)",
+      "severity": "High",
+      "confidence": "confirmed",
+      "endpoint": "/api/Orders/{id}",
+      "method": "GET",
+      "description": "An authenticated user is able to retrieve order details belonging to other users by manipulating the `id` parameter in the URL path. This allows unauthorized access to sensitive user data, such as order contents, pricing, and potentially associated user IDs.",
+      "technical_evidence": {
+        "scenario": "Comparison of requests for different order IDs by a single authenticated user.",
+        "request_1_authenticated_user_A_own_order": {
+          "url": "https://juice-shop.herokuapp.com/api/Orders/123",
+          "method": "GET",
+          "headers": {
+            "Authorization": "Bearer <JWT_TOKEN_USER_A>"
+          },
+          "response_status": 200,
+          "response_body_snippet": "{\"status\":\"success\",\"data\":{\"id\":123,\"UserId\":1,\"totalPrice\":100,...}}"
+        },
+        "request_2_authenticated_user_A_other_user_order": {
+          "url": "https://juice-shop.herokuapp.com/api/Orders/456",
+          "method": "GET",
+          "headers": {
+            "Authorization": "Bearer <JWT_TOKEN_USER_A>"
+          },
+          "response_status": 200,
+          "response_body_snippet": "{\"status\":\"success\",\"data\":{\"id\":456,\"UserId\":2,\"totalPrice\":250,...}}"
+        },
+        "comparison_result": "The response to the second request (accessing order ID 456) successfully returned data belonging to 'UserId: 2' while authenticated as 'UserId: 1'. This demonstrates a successful unauthorized access to another user's resource, confirming the IDOR vulnerability."
+      },
+      "recommendation": "Implement robust authorization checks on all resource-accessing endpoints. Ensure that the server validates whether the authenticated user is authorized to access the requested resource (e.g., order ID) before returning any data. This typically involves comparing the `UserId` associated with the requested resource to the `UserId` from the authenticated user's session/token.",
+      "_agent": "API Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Exposed Path: /robots.txt",
+      "endpoint": "https://juice-shop.herokuapp.com/robots.txt",
+      "evidence": "HTTP 200 \u2014 Body Preview: User-agent: *\nDisallow: /ftp",
+      "description": "The path '/robots.txt' returned HTTP 200 and passed content validation.",
+      "recommendation": "Restrict access to '/robots.txt' or remove it from the server.",
+      "tool": "Path Prober",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "Exposed Path: /.well-known/security.txt",
+      "endpoint": "https://juice-shop.herokuapp.com/.well-known/security.txt",
+      "evidence": "HTTP 200 \u2014 Body Preview: Contact: mailto:donotreply@owasp-juice.shop\nEncryption: https://keybase.io/bkimminich/pgp_keys.asc?fingerprint=19c01cb7157e4645e9e2c863062a85a8cbfbdcda\nAcknowledgements: /#/score-board\nPreferred-langu",
+      "description": "The path '/.well-known/security.txt' returned HTTP 200 and passed content validation.",
+      "recommendation": "Restrict access to '/.well-known/security.txt' or remove it from the server.",
+      "tool": "Path Prober",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "high",
+      "title": "CORS Wildcard \u2014 Cross-Origin Access Open",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "Access-Control-Allow-Origin: *",
+      "description": "Server allows all origins. An attacker can read API responses from any website.",
+      "recommendation": "Restrict CORS to trusted domains only.",
+      "tool": "CORS Checker",
+      "cvss": 7.5,
+      "_agent": "RealScanner"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Recon Agent",
+      "tool": "Nmap + Shodan",
+      "command": "nmap -sV -sC -p- -T4 -A juice-shop.herokuapp.com",
+      "time": 4.9,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Directory Agent",
+      "tool": "Gobuster + Dirb",
+      "command": "gobuster dir -u https://juice-shop.herokuapp.com -w common.txt",
+      "time": 20.1,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Header Agent",
+      "tool": "Nikto + Header Scan",
+      "command": "nikto -h https://juice-shop.herokuapp.com -Tuning 8",
+      "time": 10.2,
+      "error": null,
+      "finding_count": 4
+    },
+    {
+      "agent": "Injection Agent",
+      "tool": "SQLMap + XSStrike",
+      "command": "sqlmap -u \"https://juice-shop.herokuapp.com\"",
+      "time": 19.1,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "API Agent",
+      "tool": "Kiterunner",
+      "command": "kr scan https://juice-shop.herokuapp.com",
+      "time": 9.3,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Cloud Agent",
+      "tool": "ScoutSuite",
+      "command": "scout aws",
+      "time": 9.2,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "RealScanner",
+      "tool": "HTTP Probe Engine",
+      "command": "RealScanner.run_all(https://juice-shop.herokuapp.com)",
+      "time": 0,
+      "error": null,
+      "finding_count": 3
+    }
+  ]
+}

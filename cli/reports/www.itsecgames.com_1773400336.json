@@ -1,0 +1,293 @@
+{
+  "target": "https://www.itsecgames.com/",
+  "domain": "www.itsecgames.com",
+  "mode": "batch",
+  "scan_time": 29.99551486968994,
+  "risk_score": 10,
+  "summary": {
+    "critical": 4,
+    "high": 4,
+    "medium": 4,
+    "low": 1,
+    "info": 1,
+    "total": 14
+  },
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "SSH Service Detected",
+      "endpoint": "22/tcp",
+      "description": "An SSH service is exposed to the internet, potentially increasing the attack surface.",
+      "recommendation": "Restrict SSH access to trusted IP addresses only or use a bastion host.",
+      "cvss": 6.0,
+      "tool": "Nmap",
+      "poc": "nmap -p 22 --script ssh-auth-methods www.itsecgames.com",
+      "_agent": "Nmap Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Admin Login Page Discovered",
+      "endpoint": "/admin/",
+      "description": "An administrative login interface was discovered, which could be subject to brute-force attacks.",
+      "recommendation": "Implement strong authentication mechanisms, rate limiting, and multi-factor authentication for administrative access.",
+      "cvss": 6.5,
+      "tool": "Dirb",
+      "poc": "gobuster dir -u https://www.itsecgames.com/ -w /usr/share/wordlists/dirb/common.txt -x php,html,bak",
+      "_agent": "Dirb Agent"
+    },
+    {
+      "severity": "low",
+      "title": "Missing Security Headers",
+      "endpoint": "/",
+      "description": "Critical security headers like X-Frame-Options and X-XSS-Protection are missing, potentially exposing users to clickjacking and XSS attacks.",
+      "recommendation": "Implement appropriate HTTP security headers to protect against common web vulnerabilities.",
+      "cvss": 4.3,
+      "tool": "Nikto",
+      "poc": "nikto -h https://www.itsecgames.com/",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Potential SQL Injection Vector",
+      "endpoint": "/game.php?id=1",
+      "description": "A GET parameter 'id' was identified, which is a common vector for SQL injection if not properly sanitized.",
+      "recommendation": "Ensure all user-supplied input is properly validated and sanitized to prevent SQL injection vulnerabilities.",
+      "cvss": 8.8,
+      "tool": "SQLMap",
+      "poc": "sqlmap -u \"https://www.itsecgames.com/game.php?id=1\" --dbs --batch",
+      "_agent": "SQLMap Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Brute-Forceable Login Page",
+      "endpoint": "/login",
+      "description": "The login page at /login appears to be vulnerable to brute-force attacks due to lack of rate limiting.",
+      "recommendation": "Implement strong rate limiting and account lockout policies to mitigate brute-force attacks.",
+      "cvss": 7.5,
+      "tool": "Metasploit",
+      "poc": "hydra -L users.txt -P passwords.txt https://www.itsecgames.com/login http-post-form \"/login:username=^USER^&password=^PASS^:F=Login Failed\"",
+      "_agent": "Metasploit Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Outdated TLS Protocols Enabled",
+      "endpoint": ":443",
+      "description": "The server supports outdated and insecure TLS protocols (TLS 1.0 and TLS 1.1), which are vulnerable to known attacks.",
+      "recommendation": "Disable TLS 1.0 and TLS 1.1, and configure the server to only support TLS 1.2 and TLS 1.3.",
+      "cvss": 5.9,
+      "tool": "testssl",
+      "poc": "testssl.sh --protocols www.itsecgames.com",
+      "_agent": "SSL Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Development Subdomain Discovered",
+      "endpoint": "dev.itsecgames.com",
+      "description": "A 'dev' subdomain was discovered, which could potentially host insecure development versions or sensitive information.",
+      "recommendation": "Securely isolate development environments and ensure they are not publicly accessible or contain sensitive data.",
+      "cvss": 5.3,
+      "tool": "Amass",
+      "poc": "amass enum -d itsecgames.com -passive",
+      "_agent": "OSINT Agent"
+    },
+    {
+      "severity": "high",
+      "title": "CORS Misconfiguration (Wildcard Origin)",
+      "endpoint": "/",
+      "description": "The server's CORS policy allows wildcard origins with credentials, making it vulnerable to cross-origin data theft.",
+      "recommendation": "Configure CORS to restrict Access-Control-Allow-Origin to specific, trusted domains and avoid using a wildcard with credentials.",
+      "cvss": 8.1,
+      "tool": "Burp",
+      "poc": "curl -I -H \"Origin: evil.com\" https://www.itsecgames.com/",
+      "_agent": "Burp Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Publicly Accessible S3 Bucket",
+      "endpoint": "s3://itsecgames-assets/",
+      "description": "An S3 bucket named 'itsecgames-assets' is publicly accessible, containing potentially sensitive configuration and backup files.",
+      "recommendation": "Restrict public access to the S3 bucket and implement proper access control policies (IAM) to only allow authorized entities.",
+      "cvss": 9.3,
+      "tool": "ScoutSuite",
+      "poc": "aws s3 ls s3://itsecgames-assets/ --no-sign-request",
+      "_agent": "Cloud Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Exposed Kubernetes Dashboard",
+      "endpoint": "kubernetes-dashboard.itsecgames.com",
+      "description": "A Kubernetes dashboard is publicly exposed, allowing unauthorized access to manage cluster resources.",
+      "recommendation": "Restrict access to the Kubernetes dashboard through a firewall, VPN, or strong authentication mechanisms.",
+      "cvss": 9.8,
+      "tool": "kube-hunter",
+      "poc": "curl -k https://kubernetes-dashboard.itsecgames.com/",
+      "_agent": "Container Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Broken Object Level Authorization (BOLA)",
+      "endpoint": "/api/v1/users/{id}",
+      "description": "The API allows an authenticated user to access or modify resources belonging to other users by changing the object ID in the request.",
+      "recommendation": "Implement robust authorization checks at the API endpoint to ensure users can only access their own resources.",
+      "cvss": 9.0,
+      "tool": "Kiterunner",
+      "poc": "curl -X GET -H \"Authorization: Bearer <your_token>\" https://www.itsecgames.com/api/v1/users/2",
+      "_agent": "API Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Exposed .env Configuration File",
+      "endpoint": "/.env",
+      "description": "A publicly accessible .env file was discovered, containing sensitive credentials like database passwords and API keys.",
+      "recommendation": "Remove the .env file from public access and store sensitive configuration details securely using environment variables or a secrets management service.",
+      "cvss": 9.8,
+      "tool": "Nuclei",
+      "poc": "curl https://www.itsecgames.com/.env",
+      "_agent": "Secret Agent"
+    },
+    {
+      "severity": "info",
+      "title": "Cloudflare WAF Detected",
+      "endpoint": "/",
+      "description": "The target website is protected by Cloudflare WAF, indicating a layer of security defenses.",
+      "recommendation": "Be aware of the presence of the WAF during further testing, as it may block certain attack vectors.",
+      "cvss": 0.0,
+      "tool": "WafW00f",
+      "poc": "wafw00f https://www.itsecgames.com/",
+      "_agent": "WAF Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Subdomain Takeover Vulnerability",
+      "endpoint": "old.itsecgames.com",
+      "description": "The subdomain 'old.itsecgames.com' is vulnerable to takeover as its CNAME points to an unconfigured GitHub Pages instance.",
+      "recommendation": "Remove the dangling DNS record for 'old.itsecgames.com' or claim the GitHub Pages repository to prevent takeover.",
+      "cvss": 8.3,
+      "tool": "Subzy",
+      "poc": "subzy run --target old.itsecgames.com",
+      "_agent": "Takeover Agent"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Nmap Agent",
+      "tool": "Nmap + Shodan",
+      "command": "nmap -sV -sC -p- -T4 -A --script=vuln,default,http-enum www.itsecgames.com",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Dirb Agent",
+      "tool": "Gobuster + Dirb",
+      "command": "gobuster dir -u https://www.itsecgames.com/ -w /usr/share/wordlists/dirb/common.txt -x php,js,bak,env -t 50 -k",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Nikto Agent",
+      "tool": "Nikto + WhatWeb",
+      "command": "nikto -h https://www.itsecgames.com/ -ssl -Tuning 123456789abc && whatweb -a 3 https://www.itsecgames.com/",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "SQLMap Agent",
+      "tool": "SQLMap + XSStrike",
+      "command": "sqlmap -u \"https://www.itsecgames.com//?id=1\" --dbs --level=5 --batch && python3 xsstrike.py -u \"https://www.itsecgames.com/\"",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Metasploit Agent",
+      "tool": "Metasploit + Hydra",
+      "command": "msfconsole -q -x \"use auxiliary/scanner/http/http_login...\" && hydra -L users.txt www.itsecgames.com http-post-form",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "SSL Agent",
+      "tool": "testssl + SSLScan",
+      "command": "testssl.sh --color 0 www.itsecgames.com:443 && sslscan www.itsecgames.com",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "OSINT Agent",
+      "tool": "Amass + theHarvester",
+      "command": "amass enum -passive -d www.itsecgames.com && theHarvester -d www.itsecgames.com -b all",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Burp Agent",
+      "tool": "Burp Suite + CORS",
+      "command": "python3 cors_scanner.py -u https://www.itsecgames.com/ && python3 ssrf_scanner.py -u https://www.itsecgames.com/",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Cloud Agent",
+      "tool": "ScoutSuite + Pacu",
+      "command": "scout aws --no-browser && pacu --session www.itsecgames.com --run-all",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Container Agent",
+      "tool": "Trivy + Kube-hunter",
+      "command": "trivy image www.itsecgames.com:latest && kube-hunter --remote www.itsecgames.com",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "API Agent",
+      "tool": "Kiterunner + RESTler",
+      "command": "kr scan https://www.itsecgames.com/ -w routes-large.kite && restler --target https://www.itsecgames.com/",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Secret Agent",
+      "tool": "Nuclei + TruffleHog",
+      "command": "nuclei -u https://www.itsecgames.com/ -t exposures/ && trufflehog --no-update https://www.itsecgames.com/",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "WAF Agent",
+      "tool": "WafW00f + WhatWaf",
+      "command": "wafw00f https://www.itsecgames.com/ -a && whatwaf -u https://www.itsecgames.com/",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "AD Identity Agent",
+      "tool": "CrackMapExec + BloodHound",
+      "command": "cme smb www.itsecgames.com -u '' -p '' && bloodhound-python -d www.itsecgames.com -u null -p null -c All",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Takeover Agent",
+      "tool": "Subzy + Nuclei",
+      "command": "subzy run --targets subdomains.txt && nuclei -tags takeover -u https://www.itsecgames.com/",
+      "time": 30.0,
+      "error": null,
+      "finding_count": 1
+    }
+  ]
+}

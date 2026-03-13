@@ -1,0 +1,202 @@
+{
+  "target": "https://juice-shop.herokuapp.com",
+  "domain": "juice-shop.herokuapp.com",
+  "mode": "parallel",
+  "scan_time": 20.605916261672974,
+  "risk_score": 4.2,
+  "startedAt": 1773422823386,
+  "completedAt": 1773422843991,
+  "summary": "Cloud scan of https://juice-shop.herokuapp.com complete. Found 0 critical and 1 high vulnerabilities.",
+  "findings": [
+    {
+      "finding_name": "Missing Content-Security-Policy (CSP) Header",
+      "severity": "Medium",
+      "confidence": "confirmed",
+      "description": "The Content-Security-Policy (CSP) header is missing from the HTTP response. This allows the browser to load resources from any origin, making the application vulnerable to various content injection attacks, including Cross-Site Scripting (XSS), clickjacking, and data exfiltration. A properly configured CSP header significantly mitigates these risks by defining trusted sources of content.",
+      "url": "https://juice-shop.herokuapp.com",
+      "method": "GET",
+      "evidence": "HTTP response header 'Content-Security-Policy' was not found.",
+      "recommendation": "Implement a strong Content-Security-Policy header. Define allowed sources for scripts, styles, images, and other resources. Start with a strict policy and gradually relax it as needed during testing to avoid breaking legitimate functionality.",
+      "_agent": "Header Agent"
+    },
+    {
+      "finding_name": "Missing Referrer-Policy Header",
+      "severity": "Low",
+      "confidence": "confirmed",
+      "description": "The Referrer-Policy header is missing from the HTTP response. Without this header, the browser's default referrer policy will be used, which may expose the full URL, including sensitive information, to third-party sites when links are clicked. This can lead to unintended information disclosure.",
+      "url": "https://juice-shop.herokuapp.com",
+      "method": "GET",
+      "evidence": "HTTP response header 'Referrer-Policy' was not found.",
+      "recommendation": "Implement a Referrer-Policy header with a value like 'no-referrer-when-downgrade', 'same-origin', or 'strict-origin-when-cross-origin' to control when referrer information is sent to other sites.",
+      "_agent": "Header Agent"
+    },
+    {
+      "finding_name": "Missing Permissions-Policy Header",
+      "severity": "Medium",
+      "confidence": "confirmed",
+      "description": "The Permissions-Policy (formerly Feature-Policy) header is missing from the HTTP response. This header allows a web developer to selectively enable, disable, and modify the behavior of certain browser features and APIs within the browser. Its absence means all features are permitted by default, potentially allowing third-party content or embedded frames to access sensitive browser features (e.g., camera, microphone, geolocation) without explicit restriction.",
+      "url": "https://juice-shop.herokuapp.com",
+      "method": "GET",
+      "evidence": "HTTP response header 'Permissions-Policy' was not found.",
+      "recommendation": "Implement a Permissions-Policy header to control access to browser features and APIs. Define policies that restrict unnecessary features for your application and any embedded third-party content.",
+      "_agent": "Header Agent"
+    },
+    {
+      "severity": "high",
+      "title": "HSTS Missing \u2014 Forces HTTPS",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Strict-Transport-Security' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Strict-Transport-Security' security header.",
+      "recommendation": "Add the 'Strict-Transport-Security' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 7.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "Clickjacking Protection Missing",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'X-Frame-Options' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'X-Frame-Options' security header.",
+      "recommendation": "Add the 'X-Frame-Options' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "MIME Sniffing Attack Possible",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'X-Content-Type-Options' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'X-Content-Type-Options' security header.",
+      "recommendation": "Add the 'X-Content-Type-Options' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "No CSP \u2014 XSS easier to exploit",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Content-Security-Policy' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Content-Security-Policy' security header.",
+      "recommendation": "Add the 'Content-Security-Policy' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "low",
+      "title": "XSS Browser Protection Disabled",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'X-XSS-Protection' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'X-XSS-Protection' security header.",
+      "recommendation": "Add the 'X-XSS-Protection' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 2.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "low",
+      "title": "Referrer Leakage Possible",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Referrer-Policy' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Referrer-Policy' security header.",
+      "recommendation": "Add the 'Referrer-Policy' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 2.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "low",
+      "title": "No Permissions Policy",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Permissions-Policy' header. Status: 503",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Permissions-Policy' security header.",
+      "recommendation": "Add the 'Permissions-Policy' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 2.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "info",
+      "title": "Technology Disclosure: Server",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "Server: Heroku",
+      "description": "Server reveals technology stack via the 'Server' header.",
+      "recommendation": "Remove or obfuscate this header to reduce attack surface.",
+      "tool": "Header Inspector",
+      "cvss": 0.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "info",
+      "title": "Technology Disclosure: Via",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "Via: 1.1 heroku-router",
+      "description": "Server reveals technology stack via the 'Via' header.",
+      "recommendation": "Remove or obfuscate this header to reduce attack surface.",
+      "tool": "Header Inspector",
+      "cvss": 0.0,
+      "_agent": "RealScanner"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Recon Agent",
+      "tool": "Nmap + Shodan",
+      "command": "nmap -sV -sC -p- -T4 -A juice-shop.herokuapp.com",
+      "time": 4.8,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Directory Agent",
+      "tool": "Gobuster + Dirb",
+      "command": "gobuster dir -u https://juice-shop.herokuapp.com -w common.txt",
+      "time": 20.6,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Header Agent",
+      "tool": "Nikto + Header Scan",
+      "command": "nikto -h https://juice-shop.herokuapp.com -Tuning 8",
+      "time": 16.1,
+      "error": null,
+      "finding_count": 3
+    },
+    {
+      "agent": "Injection Agent",
+      "tool": "SQLMap + XSStrike",
+      "command": "sqlmap -u \"https://juice-shop.herokuapp.com\"",
+      "time": 20.6,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "API Agent",
+      "tool": "Kiterunner",
+      "command": "kr scan https://juice-shop.herokuapp.com",
+      "time": 17.6,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Cloud Agent",
+      "tool": "ScoutSuite",
+      "command": "scout aws",
+      "time": 4.4,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "RealScanner",
+      "tool": "HTTP Probe Engine",
+      "command": "RealScanner.run_all(https://juice-shop.herokuapp.com)",
+      "time": 0,
+      "error": null,
+      "finding_count": 9
+    }
+  ]
+}

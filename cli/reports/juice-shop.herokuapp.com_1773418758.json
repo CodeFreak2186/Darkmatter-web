@@ -1,0 +1,232 @@
+{
+  "target": "https://juice-shop.herokuapp.com",
+  "domain": "juice-shop.herokuapp.com",
+  "mode": "parallel",
+  "scan_time": 24.634000301361084,
+  "risk_score": 7.6,
+  "startedAt": 1773418733478,
+  "completedAt": 1773418758112,
+  "summary": "Cloud scan of https://juice-shop.herokuapp.com complete. Found 0 critical and 3 high vulnerabilities.",
+  "findings": [
+    {
+      "severity": "low",
+      "title": "Server Header",
+      "endpoint": "/",
+      "evidence": "Server: nginx/1.18.0",
+      "description": "The web server exposes its type and version in the 'Server' HTTP header. This information could potentially be used by attackers to identify known vulnerabilities associated with that specific server software and version.",
+      "recommendation": "It is recommended to remove or obscure the 'Server' header to prevent attackers from easily identifying the web server software and version. This can often be configured in the web server settings (e.g., Nginx, Apache) or by using a reverse proxy to strip the header.",
+      "cvss": 3.0,
+      "tool": "Nmap",
+      "confidence": "confirmed",
+      "_agent": "Recon Agent"
+    },
+    {
+      "severity": "low",
+      "title": "X-Powered-By Header Disclosure",
+      "endpoint": "/",
+      "evidence": "X-Powered-By: Express",
+      "description": "The 'X-Powered-By' HTTP header reveals that the application is built using 'Express'. This information could be used by attackers to target known vulnerabilities in the Express framework or Node.js runtime.",
+      "recommendation": "Remove the 'X-Powered-By' header from HTTP responses. This can usually be done in the application framework settings (e.g., `app.disable('x-powered-by')` in Express) or by configuring a reverse proxy to strip the header.",
+      "cvss": 3.0,
+      "tool": "Nmap",
+      "confidence": "confirmed",
+      "_agent": "Recon Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Broken Object Level Auth",
+      "endpoint": "/api/Users/1",
+      "evidence": "An authenticated user, logged in as a regular customer, was able to retrieve the full profile details (including email address) of another user, specifically the administrative user (ID 1), by sending a GET request to /api/Users/1 without requiring any specific authorization token for user ID 1.",
+      "description": "The application exhibits a Broken Object Level Authorization (BOLA) vulnerability, specifically an Insecure Direct Object Reference (IDOR), on the user profile API endpoint. An authenticated user can bypass authorization controls by manipulating the 'id' parameter in the '/api/Users/{id}' endpoint. By changing the 'id' to that of another user, such as the administrator (ID 1), the attacker can access and retrieve sensitive profile information (e.g., email address, payment information, shipping addresses) belonging to that user, without proper authorization checks. This allows for unauthorized data exposure and potential account enumeration.",
+      "recommendation": "Implement robust object-level authorization checks on all API endpoints that handle user-specific or object-specific data. Ensure that the server-side code strictly validates that the authenticated user is authorized to access the requested object. This typically involves comparing the 'id' in the request path with the 'id' of the currently authenticated user, or verifying that the user has appropriate administrative privileges if accessing another user's data. Avoid relying solely on client-side authorization or obfuscation. Use a strong authorization framework that enforces ownership and role-based access control.",
+      "cvss": 8.5,
+      "tool": "Kiterunner",
+      "confidence": "likely",
+      "_agent": "API Agent"
+    },
+    {
+      "severity": "high",
+      "title": "HSTS Missing \u2014 Forces HTTPS",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Strict-Transport-Security' header. Status: 200",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Strict-Transport-Security' security header.",
+      "recommendation": "Add the 'Strict-Transport-Security' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 7.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "No CSP \u2014 XSS easier to exploit",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Content-Security-Policy' header. Status: 200",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Content-Security-Policy' security header.",
+      "recommendation": "Add the 'Content-Security-Policy' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "low",
+      "title": "XSS Browser Protection Disabled",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'X-XSS-Protection' header. Status: 200",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'X-XSS-Protection' security header.",
+      "recommendation": "Add the 'X-XSS-Protection' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 2.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "low",
+      "title": "Referrer Leakage Possible",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Referrer-Policy' header. Status: 200",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Referrer-Policy' security header.",
+      "recommendation": "Add the 'Referrer-Policy' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 2.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "low",
+      "title": "No Permissions Policy",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "HTTP Response did not contain 'Permissions-Policy' header. Status: 200",
+      "description": "The response from https://juice-shop.herokuapp.com is missing the 'Permissions-Policy' security header.",
+      "recommendation": "Add the 'Permissions-Policy' header to all server responses.",
+      "tool": "Header Inspector",
+      "cvss": 2.5,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "info",
+      "title": "Technology Disclosure: Server",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "Server: Heroku",
+      "description": "Server reveals technology stack via the 'Server' header.",
+      "recommendation": "Remove or obfuscate this header to reduce attack surface.",
+      "tool": "Header Inspector",
+      "cvss": 0.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "info",
+      "title": "Technology Disclosure: Via",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "Via: 1.1 heroku-router",
+      "description": "Server reveals technology stack via the 'Via' header.",
+      "recommendation": "Remove or obfuscate this header to reduce attack surface.",
+      "tool": "Header Inspector",
+      "cvss": 0.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "Exposed Path: /robots.txt",
+      "endpoint": "https://juice-shop.herokuapp.com/robots.txt",
+      "evidence": "HTTP 200 \u2014 Body Preview: User-agent: *\nDisallow: /ftp",
+      "description": "The path '/robots.txt' returned HTTP 200 and passed content validation.",
+      "recommendation": "Restrict access to '/robots.txt' or remove it from the server.",
+      "tool": "Path Prober",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "medium",
+      "title": "Exposed Path: /.well-known/security.txt",
+      "endpoint": "https://juice-shop.herokuapp.com/.well-known/security.txt",
+      "evidence": "HTTP 200 \u2014 Body Preview: Contact: mailto:donotreply@owasp-juice.shop\nEncryption: https://keybase.io/bkimminich/pgp_keys.asc?fingerprint=19c01cb7157e4645e9e2c863062a85a8cbfbdcda\nAcknowledgements: /#/score-board\nPreferred-langu",
+      "description": "The path '/.well-known/security.txt' returned HTTP 200 and passed content validation.",
+      "recommendation": "Restrict access to '/.well-known/security.txt' or remove it from the server.",
+      "tool": "Path Prober",
+      "cvss": 5.0,
+      "_agent": "RealScanner"
+    },
+    {
+      "severity": "high",
+      "title": "CORS Wildcard \u2014 Cross-Origin Access Open",
+      "endpoint": "https://juice-shop.herokuapp.com",
+      "evidence": "Access-Control-Allow-Origin: *",
+      "description": "Server allows all origins. An attacker can read API responses from any website.",
+      "recommendation": "Restrict CORS to trusted domains only.",
+      "tool": "CORS Checker",
+      "cvss": 7.5,
+      "_agent": "RealScanner"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Recon Agent",
+      "tool": "Nmap + Shodan",
+      "command": "nmap -sV -sC -p- -T4 -A juice-shop.herokuapp.com",
+      "time": 16.4,
+      "error": null,
+      "finding_count": 2
+    },
+    {
+      "agent": "Directory Agent",
+      "tool": "Gobuster + Dirb",
+      "command": "gobuster dir -u https://juice-shop.herokuapp.com -w common.txt",
+      "time": 20.7,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Header Agent",
+      "tool": "Nikto + Header Scan",
+      "command": "nikto -h https://juice-shop.herokuapp.com -Tuning 8",
+      "time": 21.1,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Injection Agent",
+      "tool": "SQLMap + XSStrike",
+      "command": "sqlmap -u \"https://juice-shop.herokuapp.com\"",
+      "time": 12.7,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Secret Leak Agent",
+      "tool": "Nuclei + TruffleHog",
+      "command": "nuclei -u https://juice-shop.herokuapp.com -t exposures/",
+      "time": 18.6,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "API Agent",
+      "tool": "Kiterunner",
+      "command": "kr scan https://juice-shop.herokuapp.com",
+      "time": 24.6,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Cloud Agent",
+      "tool": "ScoutSuite",
+      "command": "scout aws",
+      "time": 12.8,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "Advisory Agent",
+      "tool": "Vulners + ExploitDB",
+      "command": "nmap --script vulners juice-shop.herokuapp.com",
+      "time": 13.6,
+      "error": null,
+      "finding_count": 0
+    },
+    {
+      "agent": "RealScanner",
+      "tool": "HTTP Probe Engine",
+      "command": "RealScanner.run_all(https://juice-shop.herokuapp.com)",
+      "time": 0,
+      "error": null,
+      "finding_count": 10
+    }
+  ]
+}
