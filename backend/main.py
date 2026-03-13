@@ -104,8 +104,21 @@ async def stream_scan(request: Request, job_id: str, target: str, mode: str = "s
         queue = asyncio.Queue()
         findings_collector = []
         
-        def push_event(event_type: str, data: dict):
+        def push_event(event_type: str, data: dict, sync_db: bool = False):
             queue.put_nowait((event_type, data))
+            if sync_db and event_type == "finding":
+                supabase = get_supabase()
+                if supabase:
+                    try:
+                        supabase.table("findings").insert({
+                            "job_id": job_id,
+                            "severity": data.get("severity", "medium"),
+                            "title": data.get("title", "Unknown"),
+                            "endpoint": data.get("endpoint", "/"),
+                            "description": data.get("description", ""),
+                            "tool": data.get("tool", "AI Agent")
+                        }).execute()
+                    except: pass
 
         async def run_scan_logic():
             start_time = time.time()
@@ -115,21 +128,35 @@ async def stream_scan(request: Request, job_id: str, target: str, mode: str = "s
                     push_event("status", {"message": f"{phase.capitalize()}: {msg}"})
 
                 if mode == "scan":
-                    # 1. Recon Phase
-                    on_progress("recon", "🕸️ Deep Reconnaissance Crawl...")
+                    # 1. Recon Phase — Real Crawl
+                    on_progress("recon", "🕸️ Real Reconnaissance Crawl starting...")
                     crawler = Crawler(max_depth=1 if profile == "quick" else 2)
                     surface = await crawler.crawl(target)
-                    
                     on_progress("recon", f"✓ Found {len(surface.endpoints)} endpoints & {len(surface.technologies)} technologies.")
                     
-                    # Push Technologies
                     for tech in surface.technologies:
                         push_event("finding", {
                             "severity": "info", "title": f"Tech: {tech}", "endpoint": target,
                             "path": "Detection confirmed", "description": f"Target uses {tech}.", "tool": "Crawler"
-                        })
+                        }, sync_db=True)
 
-                    # 2. Parallel AI Pentest Phase
+                    # 2. Real HTTP Security Probes
+                    from core.real_scanner import RealScanner, findings_to_dict
+                    on_progress("probe", "🔬 Running real HTTP security probes...")
+                    
+                    scanner = RealScanner(target)
+                    
+                    real_findings_raw = await scanner.run_all(
+                        on_progress=lambda p, m: push_event("terminal", {"phase": p, "log": m})
+                    )
+                    real_findings = findings_to_dict(real_findings_raw)
+                    on_progress("probe", f"✓ {len(real_findings)} real evidence-backed findings discovered.")
+                    
+                    for f in real_findings:
+                        push_event("finding", f, sync_db=True)
+                        findings_collector.append(f)
+
+                    # 3. Parallel AI Deep Analysis
                     on_progress("analysis", f"🚀 Launching {len(AGENTS)} AI Agents in Parallel...")
                     domain = get_domain(target)
                     context = f"Endpoints: {[e.url for e in surface.endpoints[:10]]}\nTech: {surface.technologies}"
@@ -167,7 +194,7 @@ async def stream_scan(request: Request, job_id: str, target: str, mode: str = "s
                                 "tool": agent.tool_name,
                                 "agent": agent.name
                             }
-                            push_event("finding", finding)
+                            push_event("finding", finding, sync_db=True)
                             findings_collector.append(finding)
 
                     # Launch all agents as concurrent tasks
@@ -216,27 +243,18 @@ async def stream_scan(request: Request, job_id: str, target: str, mode: str = "s
                     "message": "Scan Complete",
                     "totalFindings": len(findings_collector),
                     "duration": f"{elapsed:.1f}s",
-                    "riskScore": min(10, sum([5 if f["severity"] == "critical" else 3 if f["severity"] == "high" else 1 for f in findings_collector])),
-                    "openPorts": 0, # Not implemented in this lite version
-                    "directories": 0 # Not implemented in this lite version
+                    "riskScore": min(10, sum([5 if f.get("severity") == "critical" else 3 if f.get("severity") == "high" else 1 for f in findings_collector])),
+                    "openPorts": 0,
+                    "directories": 0
                 })
 
-                # Sync to Supabase
+                # Final status update
                 supabase = get_supabase()
                 if supabase:
                     try:
                         supabase.table("scans").update({"status": "complete", "completed_at": "now()"}).eq("job_id", job_id).execute()
-                        for f in findings_collector:
-                            supabase.table("findings").insert({
-                                "job_id": job_id,
-                                "severity": f["severity"],
-                                "title": f["title"],
-                                "endpoint": f["endpoint"],
-                                "description": f["description"],
-                                "tool": f["tool"]
-                            }).execute()
                     except Exception as e:
-                        print(f"Supabase sync error: {e}")
+                        print(f"Supabase final sync error: {e}")
 
             except Exception as e:
                 import traceback

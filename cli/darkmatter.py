@@ -56,10 +56,11 @@ engine_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "eng
 if engine_path not in sys.path:
     sys.path.insert(0, engine_path)
 
-from agents import AGENTS, get_domain, build_batch_prompt
+from agents import AGENTS, get_domain, build_batch_prompt, DARKMATTER_CORE_RULES
 from core.agent import RedTeamAgent
-from core.crawler import Crawler
+from core.crawler import Crawler, AttackSurface
 from core.tracker import DarkmatterTracker, ensure_initialized
+from core.real_scanner import RealScanner, findings_to_dict
 
 # ─── Setup ─────────────────────────────────────────────────────
 
@@ -108,8 +109,12 @@ def parse_json(raw: str) -> dict[str, Any]:
     if fenced:
         text = fenced.group(1)
     else:
+        # Find the first '{' to start parsing, or use the whole string if not found
         idx = raw.find("{")
-        text = raw[idx:] if idx >= 0 else raw
+        if idx >= 0:
+            text = raw[idx:]
+        else:
+            text = raw # No '{' found, try parsing the whole string
     try:
         return json.loads(text.strip())
     except json.JSONDecodeError:
@@ -122,16 +127,22 @@ def run_single_agent(idx: int, target: str, domain: str, profile: str) -> dict[s
     agent = AGENTS[idx]
     start = time.time()
     try:
-        prompt = agent.build_prompt(target, domain, profile)
+        # For parallel mode, we can still use the batched prompt builder or a simplified version
+        # We'll use the agent's specific builder which now aligns with the master role
+        prompt = f"{DARKMATTER_CORE_RULES}\nTarget: {target}\nTASK: {agent.build_prompt(target, domain, profile)}\nReturn JSON with 'findings' and 'false_positives_removed' lists."
         raw = call_gemini(agent.name, prompt)
         data = parse_json(raw)
-        data["_agent"] = agent.name
-        data["_tool"] = agent.tool_name
-        data["_icon"] = agent.icon
-        data["_command"] = agent.build_command(target, domain, profile)
-        data["_time"] = round(time.time() - start, 1)
-        data["_error"] = None
-        return data
+        
+        # Normalize response if it's the new flat format
+        agent_findings = data.get("findings", [])
+        
+        return {
+            "_agent": agent.name, "_tool": agent.tool_name, "_icon": agent.icon,
+            "_command": agent.build_command(target, domain, profile),
+            "_time": round(time.time() - start, 1), "_error": None, 
+            "findings": agent_findings,
+            "false_positives_removed": data.get("false_positives_removed", [])
+        }
     except Exception as e:
         return {
             "_agent": agent.name, "_tool": agent.tool_name, "_icon": agent.icon,
@@ -156,23 +167,31 @@ def run_batch(target: str, domain: str, profile: str, context: str = "") -> list
         console.print("[bold red]  ✗ Failed to parse batch response[/]")
         return []
 
+    # New flattened structure handling
+    all_findings = batch_data.get("findings", [])
+    fps_removed = batch_data.get("false_positives_removed", [])
+    
+    if fps_removed:
+        console.print(f"  [bold blue]ℹ[/] AI discarded [bold]{len(fps_removed)}[/] potential false positives.")
+        for fp in fps_removed:
+            console.print(f"     [dim]↳ Dropped: {fp.get('path', '?')} ({fp.get('reason', 'no signature')})[/]")
+        console.print()
+
+    # Distribute findings back into agent-structured results for legacy printing/UI compatibility
     results = []
     for agent in AGENTS:
-        agent_data = batch_data.get(agent.json_key, {})
-        if isinstance(agent_data, dict):
-            agent_data["_agent"] = agent.name
-            agent_data["_tool"] = agent.tool_name
-            agent_data["_icon"] = agent.icon
-            agent_data["_command"] = agent.build_command(target, domain, profile)
-            agent_data["_time"] = round(elapsed, 1)
-            agent_data["_error"] = None
-        else:
-            agent_data = {
-                "_agent": agent.name, "_tool": agent.tool_name, "_icon": agent.icon,
-                "_command": agent.build_command(target, domain, profile),
-                "_time": round(elapsed, 1), "_error": "Missing from response", "findings": [],
-            }
-        results.append(agent_data)
+        # Find findings belonging to this agent
+        agent_findings = [f for f in all_findings if f.get("agent") == agent.name or f.get("agent") == agent.json_key]
+        
+        results.append({
+            "_agent": agent.name, 
+            "_tool": agent.tool_name, 
+            "_icon": agent.icon,
+            "_command": agent.build_command(target, domain, profile),
+            "_time": round(elapsed, 1), 
+            "_error": None, 
+            "findings": agent_findings
+        })
 
     console.print(f"  [bold green]✓ Batch complete in {elapsed:.1f}s — 1 API call[/]")
     return results
@@ -377,16 +396,33 @@ def print_summary(target: str, results: list[dict[str, Any]], elapsed: float, mo
     report_dir = Path(__file__).parent / "reports"
     report_dir.mkdir(exist_ok=True)
     report_file = report_dir / f"{get_domain(target)}_{int(time.time())}.json"
-    report_file.write_text(json.dumps({
+    
+    report_data = {
         "target": target, "domain": get_domain(target), "mode": mode,
         "scan_time": elapsed, "risk_score": risk,
-        "summary": {"critical": crit, "high": high, "medium": med, "low": low, "info": info_c, "total": len(findings)},
+        "startedAt": int(time.time() * 1000) - int(elapsed * 1000),
+        "completedAt": int(time.time() * 1000),
+        "summary": f"Cloud scan of {target} complete. Found {crit} critical and {high} high vulnerabilities.",
         "findings": findings,
         "agents": [{"agent": r.get("_agent"), "tool": r.get("_tool"), "command": r.get("_command"),
                      "time": r.get("_time"), "error": r.get("_error"),
                      "finding_count": len(r.get("findings", []))} for r in results],
-    }, indent=2))
+    }
+    
+    report_file.write_text(json.dumps(report_data, indent=2))
     console.print(f"  [bold green]✓ Report saved:[/] {report_file}")
+
+    # Sync to Dashboard
+    try:
+        import httpx as sync_httpx
+        resp = sync_httpx.post("http://localhost:3000/api/scan/import", json=report_data, timeout=5)
+        if resp.status_code == 200:
+            console.print("  [bold cyan]✓ Synced to Cloud Dashboard[/]")
+        else:
+            console.print(f"  [dim]! Dashboard sync failed (HTTP {resp.status_code})[/]")
+    except Exception as e:
+        console.print(f"  [dim]! Dashboard sync unavailable: {e}[/]")
+    
     console.print()
 
 
@@ -491,28 +527,78 @@ def run_fuzz(target: str, profile: str = "full", rps: float = 10.0, auth_token: 
 # ─── Main ──────────────────────────────────────────────────────
 
 async def run_scan(target: str, profile: str = "full", mode: str = "batch", print_banner_flag: bool = True):
+
     domain = get_domain(target)
     if print_banner_flag:
         print_banner()
 
-    console.rule("[bold green]SCAN INITIATED (REAL RECON + AI ANALYSIS)", style="green")
+    console.rule("[bold green]DARKMATTER SCAN — REAL HTTP PROBES + AI ANALYSIS", style="green")
     console.print(f"  [bold white]Target:[/]  {target}")
     console.print(f"  [bold white]Domain:[/]  {domain}")
-    
-    # NEW: Run real crawler first to avoid "shit" hallucinations
-    crawler = Crawler(max_depth=1 if profile == "quick" else 2)
-    with console.status("[bold yellow]🕷️ Performing real reconnaissance crawl..."):
-        surface = await crawler.crawl(target)
-    
-    console.print(f"  [bold green]✓ Found {len(surface.endpoints)} real endpoints and {len(surface.technologies)} technologies.[/]")
     console.print()
 
-    print_agent_commands(target, domain, profile)
+    # ── PHASE 1: Real Crawl ───────────────────────────────────────
+    crawler = Crawler(max_depth=1 if profile == "quick" else 2)
+    with console.status("[bold yellow]🕷️  Phase 1: Real reconnaissance crawl..."):
+        surface: AttackSurface = await crawler.crawl(target)
+    console.print(f"  [bold green]✓[/] Found [bold]{len(surface.endpoints)}[/] real endpoints, [bold]{len(surface.technologies)}[/] technologies.")
+    for tech in surface.technologies[:8]:
+        console.print(f"     [dim cyan]↳ {tech}[/]")
+    console.print()
+
+    # ── PHASE 2: Real HTTP Security Probes ───────────────────────
+    console.rule("[bold yellow]Phase 2: Real HTTP Security Probes", style="yellow")
+    console.print()
+    
+    real_findings_raw = []
+
+    def on_log(phase, msg):
+        console.print(f"  [dim yellow][{phase.upper()}][/] {msg}")
+
+    scanner = RealScanner(target, timeout=10.0)
+    real_findings_raw = await scanner.run_all(on_progress=lambda p, m: on_log(p, m))
+    real_findings = findings_to_dict(real_findings_raw)
+
+    console.print()
+    console.print(f"  [bold green]✓ Real probes complete:[/] {len(real_findings)} grounded findings discovered.")
+    console.print()
+
+    # Print real findings live
+    if real_findings:
+        console.rule("[bold green]Evidence-Backed Findings", style="green")
+        for i, f in enumerate(real_findings, 1):
+            sev = f.get("severity", "info")
+            icon = SEV_ICONS.get(sev, "⚪")
+            style = SEV_COLORS.get(sev, "dim")
+            console.print(f"  {icon} [{style}][{sev.upper()}][/] {f['title']}")
+            console.print(f"     [dim]Evidence: {f['evidence'][:120]}[/]")
+            console.print(f"     [yellow]→ {f['endpoint']}[/]")
+            console.print()
+
+    # ── PHASE 3: AI Deep Analysis ─────────────────────────────────
+    console.rule("[bold cyan]Phase 3: AI Deep Analysis (15 Agents)", style="cyan")
+    console.print()
+
+    # Limit headers for context to avoid token bloat
+    hdrs = [item for i, item in enumerate(surface.response_headers.items()) if i < 10]
+    headers_context = dict(hdrs)
+
+    # Build rich context from REAL data
+    context_data = (
+        f"REAL CRAWL DATA:\n"
+        f"  Endpoints ({len(surface.endpoints)}): {[e.url for e in surface.endpoints[:15]]}\n"
+        f"  Technologies: {surface.technologies}\n"
+        f"  Response headers: {headers_context}\n\n"
+        f"REAL HTTP PROBE FINDINGS ({len(real_findings)}):\n"
+        + "\n".join(
+            f"  - [{f['severity'].upper()}] {f['title']} at {f['endpoint']}\n    Evidence: {f['evidence'][:200]}"
+            for f in real_findings[:15]
+        )
+    )
 
     start = time.time()
-    context_data = str(surface.endpoints[:10]) + str(surface.technologies)
     if mode == "parallel":
-        results = run_parallel(target, domain, profile) # parallel doesn't use batch prompt context yet but we could add it
+        results = run_parallel(target, domain, profile)
     else:
         results = run_batch(target, domain, profile, context=context_data)
     elapsed = time.time() - start
@@ -522,6 +608,18 @@ async def run_scan(target: str, profile: str = "full", mode: str = "batch", prin
     console.print()
     for r in results:
         print_agent_result(r)
+
+    # Inject real findings as a dedicated "RealScanner" agent result
+    if real_findings:
+        results.append({
+            "_agent": "RealScanner",
+            "_tool": "HTTP Probe Engine",
+            "_icon": "🔬",
+            "_command": f"RealScanner.run_all({target})",
+            "_time": 0,
+            "_error": None,
+            "findings": real_findings,
+        })
 
     print_ports(results)
     print_directories(results)
@@ -639,6 +737,7 @@ Commands:
   scan       AI-powered security scan (informed by real recon)
   fuzz       Real active fuzzing (crawl + classify + inject payloads + detect)
   attack     Complete lifecycle (scan + fuzz combined)
+  vm         E2B Remote Sandbox (Run tools in isolated cloud VMs)
   lifecycle  4-Phase Rigorous Pentest Lifecycle (Recon -> Vuln Analysis -> Exploit -> Report)
 
 Examples:
@@ -686,6 +785,10 @@ Examples:
     ap.add_argument("--mode", choices=["batch", "parallel"], default="batch")
     ap.add_argument("--rps", type=float, default=10.0, help="Requests per second (default: 10)")
     ap.add_argument("--auth-token", type=str, default=None, help="Bearer auth token")
+
+    # vm command
+    vp = sub.add_parser("vm", help="Execute tools in a remote E2B sandbox")
+    vp.add_argument("tool_cmd", help="The command to run in the VM (e.g., 'nmap -F example.com')")
 
     # lifecycle command
     lp = sub.add_parser("lifecycle", help="Run the rigorous 4-phase pentest lifecycle")
@@ -756,6 +859,34 @@ Examples:
             console.print(f"[white]Reason: {guardian.analyze_recent_activity().get('reason', 'Security Violation')}[/]")
             console.print(f"[dim]To restore access for testing, run the restore command.[/]\n")
             sys.exit(1)
+
+    if args.command == "vm":
+        tracker.track_action("vm", "e2b_remote", {"command": args.tool_cmd})
+        from core.e2b_sandbox import DarkmatterSandbox
+        import asyncio
+
+        print_banner()
+        console.rule("[bold cyan]E2B REMOTE SANDBOX", style="cyan")
+        console.print(f"  [bold white]VM Command:[/]  {args.tool_cmd}")
+        console.print(f"  [bold white]Status:[/]      Spinning up enclave...")
+
+        sandbox = DarkmatterSandbox()
+        result = asyncio.run(sandbox.execute_tool(args.tool_cmd))
+
+        if "error" in result:
+            console.print(f"\n[bold red]✗ Sandbox Error:[/] {result['error']}")
+        else:
+            console.print(f"  [bold white]Sandbox ID:[/]  {result['sandbox_id']}")
+            console.print(f"  [bold white]Exit Code:[/]   {result['exit_code']}")
+            console.print()
+            console.rule("[bold white]STDOUT", style="dim")
+            console.print(result["stdout"] or "[dim]No output[/]")
+            if result["stderr"]:
+                console.print()
+                console.rule("[bold red]STDERR", style="dim")
+                console.print(result["stderr"], style="red")
+            console.rule("[bold green]SESSION TERMINATED", style="green")
+        return
 
     def ensure_http(url):
         url = url.strip()

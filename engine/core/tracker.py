@@ -1,16 +1,21 @@
-
-"""
-tracker.py — Provenance and Audit Tracking for Darkmatter.
-Ensures every action is initialized and tracked for accountability.
-"""
-
 import os
 import json
 import time
 import socket
 import requests
+import uuid
 from pathlib import Path
 from rich.console import Console
+
+# Import Supabase from backend if possible
+try:
+    import sys
+    backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    from database import get_supabase
+except ImportError:
+    def get_supabase(): return None
 
 console = Console()
 
@@ -97,6 +102,29 @@ class DarkmatterTracker:
         
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry) + "\n")
+            
+        # Optional Supabase Sync
+        self.sync_to_supabase(command, target, log_entry)
+
+    def sync_to_supabase(self, command: str, target: str, entry: dict):
+        supabase = get_supabase()
+        if not supabase:
+            return
+
+        try:
+            # If it's a scan/attack start, create a record
+            if command in ["scan", "fuzz", "attack", "lifecycle", "agent"]:
+                job_id = str(uuid.uuid4())
+                supabase.table("scans").insert({
+                    "job_id": job_id,
+                    "target": target,
+                    "status": "running",
+                    "mode": command,
+                    "profile": entry.get("metadata", {}).get("profile", "full"),
+                    "created_at": "now()"
+                }).execute()
+        except Exception as e:
+            pass
 
 def ensure_initialized():
     tracker = DarkmatterTracker()

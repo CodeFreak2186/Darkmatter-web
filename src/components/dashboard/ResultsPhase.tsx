@@ -180,8 +180,19 @@ function FindingRow({ f, expanded, onToggle }: { f: Finding; expanded: boolean; 
     return (
         <div onClick={onToggle} className="px-5 py-3.5 hover:bg-white/[0.01] transition-colors cursor-pointer group border-b border-white/[0.025]">
             <div className="flex items-start gap-3">
-                <span className="shrink-0 mt-0.5 px-2 py-0.5 text-[9px] font-mono font-bold rounded-md"
-                    style={{ backgroundColor: sev.bg, color: sev.color, boxShadow: sev.glow }}>{sev.label}</span>
+                <div className="flex flex-col gap-1 items-start">
+                    <span className="shrink-0 px-2 py-0.5 text-[9px] font-mono font-bold rounded-md"
+                        style={{ backgroundColor: sev.bg, color: sev.color, boxShadow: sev.glow }}>{sev.label}</span>
+                    {f.confidence && (
+                        <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border ${
+                            f.confidence === 'confirmed' ? 'border-[#4af626]/20 text-[#4af626]/60' : 
+                            f.confidence === 'likely' ? 'border-[#ffd93d]/20 text-[#ffd93d]/60' : 
+                            'border-[#555]/20 text-[#555]/60'
+                        }`}>
+                            {f.confidence.toUpperCase()}
+                        </span>
+                    )}
+                </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[13px] text-[#F4F6FF] font-medium group-hover:text-white transition-colors">{f.title}</span>
@@ -191,6 +202,16 @@ function FindingRow({ f, expanded, onToggle }: { f: Finding; expanded: boolean; 
                     {expanded && (
                         <div className="mt-2.5 space-y-2.5 animate-[fadeIn_0.2s_ease-out]">
                             <p className="text-[12px] text-[#666] leading-relaxed">{f.description}</p>
+                            
+                            {f.evidence && (
+                                <div className="p-3 rounded-xl bg-[#0a0c12] border border-white/[0.04]">
+                                    <div className="text-[9px] font-mono text-[#555] tracking-wider mb-1">TECHNICAL EVIDENCE</div>
+                                    <pre className="text-[11px] font-mono text-[#A7ACBF] whitespace-pre-wrap leading-tight bg-black/20 p-2 rounded border border-white/[0.02]">
+                                        {f.evidence}
+                                    </pre>
+                                </div>
+                            )}
+
                             {f.recommendation && (
                                 <div className="p-3 rounded-xl bg-[#B6FF2E]/[0.04] border border-[#B6FF2E]/10">
                                     <div className="text-[9px] font-mono text-[#B6FF2E]/50 tracking-wider mb-1">RECOMMENDATION</div>

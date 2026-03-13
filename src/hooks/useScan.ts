@@ -25,6 +25,8 @@ export interface Finding {
     cvss?: number;
     tool?: string;
     cve?: string;
+    evidence?: string;
+    confidence?: 'confirmed' | 'likely' | 'possible' | 'inconclusive';
 }
 
 export interface PortResult {
