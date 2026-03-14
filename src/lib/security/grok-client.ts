@@ -3,7 +3,7 @@
 
 import { GrokAnalysis, Severity } from './types';
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 function getApiKey(): string {
     const key = process.env.GEMINI_API_KEY;
@@ -70,6 +70,8 @@ function parseGeminiJson(raw: string): GrokAnalysis {
         }
         
         const parsed = JSON.parse(jsonStr);
+        if (!parsed || typeof parsed !== 'object') throw new Error('Parsed JSON is not an object');
+        
         const findingsArray = Array.isArray(parsed.findings) ? parsed.findings : 
                             (Array.isArray(parsed) ? parsed : []);
 
@@ -141,7 +143,9 @@ function salvageFindings(brokenStr: string): any[] {
                     evidence: f.evidence || '',
                     cwe: f.cwe || '',
                     line: f.line || undefined,
+                    endLine: f.endLine || undefined,
                     fixSnippet: f.fixSnippet || undefined,
+                    risk: f.risk || undefined,
                 });
             }
         } catch {

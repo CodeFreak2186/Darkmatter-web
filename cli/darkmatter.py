@@ -930,12 +930,14 @@ Examples:
                         console.print("  [bold green][+] Signature matched! Ownership verified.[/]")
                     else:
                         console.print("  [bold red][!] Signature NOT found or mismatch. Access denied.[/]")
-                        console.print("  [cyan][*][/] Falling back to Simple Scan Mode.")
-                        if hasattr(args, 'profile'): args.profile = "quick"
+                        console.print("  [bold red][!] Aborting scan due to verification failure.[/]")
+                        import sys
+                        sys.exit(1)
                 except Exception:
                     console.print("  [bold red][!] Network error during verification.[/]")
-                    console.print("  [cyan][*][/] Falling back to Simple Scan Mode.")
-                    if hasattr(args, 'profile'): args.profile = "quick"
+                    console.print("  [bold red][!] Aborting scan due to connectivity issues during verification.[/]")
+                    import sys
+                    sys.exit(1)
             else:
                 console.print("  [cyan][*][/] Verification Bypassed. Initiating Full Protocol Under Responsibility Waiver.")
                 console.print("  [bold red][!] WARNING: You have assumed full legal/technical responsibility for this scan.[/]")
