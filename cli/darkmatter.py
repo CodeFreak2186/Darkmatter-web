@@ -13,6 +13,9 @@ Usage:
 
 import sys
 import os
+
+# Add backend to path globally
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
 import json
 import re
 import time
@@ -355,7 +358,7 @@ def print_findings_table(results: list[dict[str, Any]]):
     table.add_column("CVE", style="cyan", width=16)
 
     for i, f in enumerate(findings, 1):
-        sev = f.get("severity", "info")
+        sev = str(f.get("severity", "info")).lower()
         table.add_row(str(i), Text(sev.upper(), style=SEV_COLORS.get(sev, "dim")),
                        f.get("title", "?"), f.get("endpoint", "?"), str(f.get("cvss", "?")),
                        f.get("tool", "?"), f.get("cve", "-"))
@@ -365,11 +368,11 @@ def print_findings_table(results: list[dict[str, Any]]):
 
 def print_summary(target: str, results: list[dict[str, Any]], elapsed: float, mode: str):
     findings = [f for r in results for f in r.get("findings", [])]
-    crit = sum(1 for f in findings if f.get("severity") == "critical")
-    high = sum(1 for f in findings if f.get("severity") == "high")
-    med = sum(1 for f in findings if f.get("severity") == "medium")
-    low = sum(1 for f in findings if f.get("severity") == "low")
-    info_c = sum(1 for f in findings if f.get("severity") == "info")
+    crit = sum(1 for f in findings if str(f.get("severity")).lower() == "critical")
+    high = sum(1 for f in findings if str(f.get("severity")).lower() == "high")
+    med = sum(1 for f in findings if str(f.get("severity")).lower() == "medium")
+    low = sum(1 for f in findings if str(f.get("severity")).lower() == "low")
+    info_c = sum(1 for f in findings if str(f.get("severity")).lower() == "info")
 
     risk = min(10, round(crit * 2.5 + high * 1.5 + med * 0.7 + low * 0.2, 1))
 
@@ -568,7 +571,7 @@ async def run_scan(target: str, profile: str = "full", mode: str = "batch", prin
     if real_findings:
         console.rule("[bold green]Evidence-Backed Findings", style="green")
         for i, f in enumerate(real_findings, 1):
-            sev = f.get("severity", "info")
+            sev = str(f.get("severity", "info")).lower()
             icon = SEV_ICONS.get(sev, "⚪")
             style = SEV_COLORS.get(sev, "dim")
             console.print(f"  {icon} [{style}][{sev.upper()}][/] {f['title']}")
@@ -584,17 +587,20 @@ async def run_scan(target: str, profile: str = "full", mode: str = "batch", prin
     hdrs = [item for i, item in enumerate(surface.response_headers.items()) if i < 10]
     headers_context = dict(hdrs)
 
-    # Build rich context from REAL data
+    # 🛠️ SCANNER TOOL INTEGRATION: Build rich grounded context for agents
     context_data = (
-        f"REAL CRAWL DATA:\n"
-        f"  Endpoints ({len(surface.endpoints)}): {[e.url for e in surface.endpoints[:15]]}\n"
-        f"  Technologies: {surface.technologies}\n"
-        f"  Response headers: {headers_context}\n\n"
-        f"REAL HTTP PROBE FINDINGS ({len(real_findings)}):\n"
+        "GUARDED SCANNER DATA (TOOL OUTPUT):\n"
+        f"CORE_TECH: {surface.technologies}\n"
+        f"TOTAL_UNIQUE_ENDPOINTS: {len(surface.endpoints)}\n"
+        f"ENDPOINTS_SAMPLE:\n"
+        + "\n".join(f"  - [{e.method}] {e.url}" for e in surface.endpoints[:15])
+        + "\n\nREAL_HTTP_PROBE_FINDINGS (Ground Truth Evidence):\n"
         + "\n".join(
-            f"  - [{f['severity'].upper()}] {f['title']} at {f['endpoint']}\n    Evidence: {f['evidence'][:200]}"
+            f"  - [{f['severity'].upper()}] {f['title']} | {f['endpoint']}\n    Evidence: {f['evidence'][:200]}"
             for f in real_findings[:15]
         )
+        + f"\n\nSCANNER_INTEGRATION: Analyzed headers for {len(surface.endpoints)} paths. "
+        + "Verification confirmed for status 200 responses only."
     )
 
     start = time.time()
@@ -800,8 +806,6 @@ Examples:
 
     args = parser.parse_args()
 
-    # Import Guardian here to avoid circular dependencies
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
     from guardian import DarkmatterGuardian
 
     tracker = DarkmatterTracker()
