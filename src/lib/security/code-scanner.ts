@@ -299,6 +299,14 @@ export async function scanCode(
             // Filter to scannable files (skip very large or binary-like files)
             const scannableFiles = files.filter(f => {
                 if (f.content.length > 50000) return false;
+                
+                // Ignore library, build, and hidden directories
+                const lowerPath = f.path.toLowerCase();
+                const ignoredDirs = ['node_modules/', 'venv/', 'env/', '.next/', '.git/', 'dist/', 'build/', '__pycache__/', '.next/'];
+                if (ignoredDirs.some(dir => lowerPath.includes(dir) || lowerPath.startsWith(dir))) {
+                    return false;
+                }
+
                 const ext = f.path.split('.').pop()?.toLowerCase() || '';
                 const codeExts = ['py', 'js', 'ts', 'tsx', 'jsx', 'java', 'go', 'rb', 'php', 'cs', 'c', 'cpp', 'rs', 'yaml', 'yml', 'json', 'xml', 'html', 'css', 'env', 'sh', 'bash', 'sql', 'tf', 'hcl'];
                 return codeExts.includes(ext) || !ext;

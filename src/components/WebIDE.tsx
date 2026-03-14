@@ -331,10 +331,23 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
     const [scanning, setScanning] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [scanFindings, setScanFindings] = useState<any[]>([]);
+    const [terminalLogs, setTerminalLogs] = useState<{ msg: string; type: 'info' | 'error' | 'success' }[]>([
+        { msg: 'Welcome to Darkmatter Security IDE v2.5', type: 'info' },
+        { msg: 'System ready. Upload files to begin analysis.', type: 'info' }
+    ]);
+    const [terminalOpen, setTerminalOpen] = useState(true);
     const [monacoLoaded, setMonacoLoaded] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const editorRef = useRef<any>(null);
     const monacoRef = useRef<any>(null);
+    const terminalEndRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll terminal
+    useEffect(() => {
+        if (terminalEndRef.current) {
+            terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [terminalLogs]);
 
     const scanFindingsRef = useRef<any[]>([]);
     useEffect(() => { scanFindingsRef.current = scanFindings; }, [scanFindings]);
@@ -635,19 +648,20 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                             const data = JSON.parse(line.slice(6));
 
                             if (data.type === 'progress') {
-                                // console.log(data.message);
+                                setTerminalLogs(prev => [...prev, { msg: `> ${data.message}`, type: 'info' }]);
                             } else if (data.type === 'result') {
-                                const findings = data.findings || [];
-                                setScanFindings(findings);
+                                setScanFindings(data.findings || []);
+                                setTerminalLogs(prev => [...prev, { msg: `✓ Scan Successful: Found ${data.totalFindings} vulnerabilities.`, type: 'success' }]);
                             } else if (data.type === 'error') {
-                                console.error(data.message);
+                                setTerminalLogs(prev => [...prev, { msg: `⨯ ${data.message}`, type: 'error' }]);
                             }
                         } catch { /* skip unparseable */ }
                     }
                 }
             }
         } catch (err) {
-            console.error(err);
+            const msg = err instanceof Error ? err.message : 'Unknown scan error';
+            setTerminalLogs(prev => [...prev, { msg: `⨯ ${msg}`, type: 'error' }]);
         } finally {
             setScanning(false);
         }
@@ -853,6 +867,29 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                 />
             </div>
 
+            {/* Bottom Terminal */}
+            {terminalOpen && (
+                <div className="h-40 bg-[#0a0c14] border-t border-[#1e2030] flex flex-col shrink-0 font-mono">
+                    <div className="flex items-center justify-between px-3 py-1 bg-[#12141f] border-b border-[#1e2030] text-[10px] text-[#888] tracking-widest uppercase">
+                        <span>Terminal — Security Agent Output</span>
+                        <button onClick={() => setTerminalOpen(false)} className="hover:text-white transition-colors">
+                            <X size={12} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 text-[12px] space-y-1">
+                        {terminalLogs.map((log, i) => (
+                            <div key={i} className={`${
+                                log.type === 'error' ? 'text-[#ff6b6b]' : 
+                                log.type === 'success' ? 'text-[#B6FF2E]' : 'text-[#888]'
+                            }`}>
+                                {log.msg}
+                            </div>
+                        ))}
+                        <div ref={terminalEndRef} />
+                    </div>
+                </div>
+            )}
+
             {/* Status Bar */}
             <div className="h-6 bg-[#0a0c14] border-t border-[#1e2030] flex items-center px-3 text-[11px] shrink-0 select-none">
                 <div className="flex items-center gap-4 text-[#888]">
@@ -860,6 +897,9 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                     <span className="flex items-center gap-1"><CheckCircle size={12} className="text-[#28c840]" /> {flattenFiles(fileSystem).length} files</span>
                     <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setSidebarOpen(!sidebarOpen)}>
                         <PanelLeft size={12} /> Sidebar
+                    </span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setTerminalOpen(!terminalOpen)}>
+                        <TerminalIcon size={12} /> Terminal
                     </span>
                 </div>
                 <div className="flex-1" />

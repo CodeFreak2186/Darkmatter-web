@@ -233,21 +233,24 @@ async def stream_scan(request: Request, job_id: str, target: str, mode: str = "s
                                     print(f"Agent {agent.name} error: {e}")
                                 return []
 
-                            # Run the sync AI call in a separate thread to keep SSE flowing
-                            findings = await asyncio.to_thread(sync_task)
-                            
-                            on_progress("analysis", f"Agent {agent.name} complete ({len(findings)} findings).")
-                            push_event("terminal", {"phase": "analysis", "log": f"[{agent.icon}] {agent.name} finished."})
-                            
-                            # Start time tracking for UI
                             import time
-                            # We can approximate time or just return 0, but ideally we'd track it
-                            elapsed = time.time() - start_time
+                            start_agent_time = time.time()
+                            try:
+                                findings = await asyncio.to_thread(sync_task)
+                                status = "done"
+                                error = None
+                            except Exception as e:
+                                findings = []
+                                status = "error"
+                                error = str(e)
+                            
+                            elapsed = time.time() - start_agent_time
                             push_event("agent_report", {
                                 "agentName": agent.name,
                                 "toolName": agent.tool_name,
-                                "toolOutput": f"{len(findings)} findings discovered",
-                                "timeTaken": elapsed
+                                "toolOutput": f"{len(findings)} findings discovered" if status == "done" else f"Error: {error}",
+                                "timeTaken": elapsed,
+                                "status": status
                             })
                             
                             for f in findings:

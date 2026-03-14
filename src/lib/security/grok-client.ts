@@ -50,22 +50,36 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
 }
 
 function parseGeminiJson(raw: string): GrokAnalysis {
+    if (!raw) return { findings: [], summary: 'Empty response from AI.', riskScore: 0 };
+    
     // Extract JSON from response (may be wrapped in markdown code blocks)
-    let jsonStr = raw;
-    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+    let jsonStr = raw.trim();
+    
+    // Better regex for nested JSON extraction
+    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) || 
+                     raw.match(/(\{[\s\S]*\})/); 
+                     
     if (jsonMatch) {
         jsonStr = jsonMatch[1].trim();
     }
 
     try {
+        // Basic cleanup for common truncation issues
+        if (jsonStr.endsWith(',') || jsonStr.endsWith(', ')) {
+            jsonStr = jsonStr.substring(0, jsonStr.lastIndexOf(',')) + ']}';
+        }
+        
         const parsed = JSON.parse(jsonStr);
+        const findingsArray = Array.isArray(parsed.findings) ? parsed.findings : 
+                            (Array.isArray(parsed) ? parsed : []);
+
         return {
-            findings: (parsed.findings || []).map((f: Record<string, unknown>, i: number) => ({
+            findings: findingsArray.map((f: any) => ({
                 severity: (f.severity as Severity) || 'info',
                 title: (f.title as string) || 'Unknown Issue',
                 endpoint: (f.endpoint as string) || '/',
                 description: (f.description as string) || '',
-                agent: (f.agent as string) || 'AI Agent',
+                agent: (f.agent as string) || 'Code Agent',
                 remediation: (f.remediation as string) || '',
                 evidence: (f.evidence as string) || '',
                 cwe: (f.cwe as string) || '',
@@ -74,13 +88,67 @@ function parseGeminiJson(raw: string): GrokAnalysis {
                 fixSnippet: (f.fixSnippet as string) || undefined,
                 risk: (f.risk as string) || undefined,
             })),
-            summary: parsed.summary || '',
+            summary: parsed.summary || 'Analysis complete.',
             riskScore: parsed.riskScore || 0,
         };
-    } catch {
-        console.error('Failed to parse Gemini JSON response:', jsonStr.substring(0, 500));
-        return { findings: [], summary: 'Analysis completed but output could not be parsed.', riskScore: 0 };
+    } catch (err) {
+        console.error('Failed to parse Gemini JSON response:', err);
+        console.error('Raw problematic string:', jsonStr.substring(0, 1000));
+        
+        // Salvage attempt: Use regex to find individual finding objects in the broken string
+        const salvagedFindings = salvageFindings(jsonStr);
+        if (salvagedFindings.length > 0) {
+            console.log(`Salvaged ${salvagedFindings.length} findings from broken AI response.`);
+            return {
+                findings: salvagedFindings,
+                summary: 'Analysis completed (partially salvaged from malformed output).',
+                riskScore: Math.min(100, salvagedFindings.length * 10)
+            };
+        }
+
+        return { 
+            findings: [], 
+            summary: 'Analysis completed but the output format was invalid and could not be salvaged.', 
+            riskScore: 0 
+        };
     }
+}
+
+/**
+ * Attempts to extract individual finding objects from a malformed or truncated JSON string
+ */
+function salvageFindings(brokenStr: string): any[] {
+    const findings: any[] = [];
+    // Look for objects that look like findings: { "severity": "...", "title": "..." }
+    const findingPattern = /\{\s*"severity":\s*"[^"]*",\s*"title":\s*"[^"]*"[\s\S]*?\}/g;
+    let match;
+    
+    while ((match = findingPattern.exec(brokenStr)) !== null) {
+        try {
+            // Try to fix common trailing issues in the fragment
+            let fragment = match[0].trim();
+            if (!fragment.endsWith('}')) fragment += '}';
+            
+            const f = JSON.parse(fragment);
+            if (f.severity && f.title) {
+                findings.push({
+                    severity: f.severity || 'info',
+                    title: f.title || 'Unknown Issue',
+                    endpoint: f.endpoint || '/',
+                    description: f.description || '',
+                    agent: f.agent || 'Code Agent',
+                    remediation: f.remediation || '',
+                    evidence: f.evidence || '',
+                    cwe: f.cwe || '',
+                    line: f.line || undefined,
+                    fixSnippet: f.fixSnippet || undefined,
+                });
+            }
+        } catch {
+            // If even the fragment is unparseable after fixing, skip it
+        }
+    }
+    return findings;
 }
 
 // ─── Cybersecurity System Prompt ─────────────────────────────
@@ -109,12 +177,15 @@ Provide your findings as valid JSON exactly in this format:
       "cwe": "CWE-XXX",
       "line": 42,
       "endLine": 44,
-      "fixSnippet": "import { rateLimit } from 'express-rate-limit';\\nconst limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });\\napp.use(limiter);"
+      "fixSnippet": "import { rateLimit } from 'express-rate-limit';\\nconst limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });\\napp.use(limiter);" // ONLY small patches, no full files!
     }
   ],
   "summary": "Brief overall security assessment",
   "riskScore": 75
-}`;
+}
+
+DO NOT under any circumstances return a JSON larger than 4kb. If you have many findings, only return the Top 3 most critical ones.
+KEEP descriptions and fixSnippets short and focused!`;
 
 // ─── URL Analysis ────────────────────────────────────────────
 
@@ -186,8 +257,11 @@ Analyze strictly for:
 
 CRITICAL INSTRUCTIONS:
 - Do NOT report syntax errors, linting issues, missing generic imports, or normal programming bugs.
-- Limit your report to a MAXIMUM of the 7 most severe vulnerabilities across all files combined to prevent JSON truncation.
-- Be precise and reference exact line numbers. YOU MUST under ALL circumstances provide an exact code replacement in the \`fixSnippet\` field that correctly patches the vulnerability. Even for hardcoded passwords/keys, provide the snippet that uses \`os.getenv()\` or \`process.env\`. You MUST also correctly define \`line\` and \`endLine\` for where the replacement goes! Failure to provide \`fixSnippet\` will break the IDE.`;
+- Limit your report to a MAXIMUM of the 5 most severe vulnerabilities across all files combined to prevent JSON truncation.
+- Be precise and reference exact line numbers. YOU MUST provide an exact code replacement in the \`fixSnippet\` field.
+- IMPORTANT: \`fixSnippet\` MUST ONLY contain the code block that replaces the lines from \`line\` to \`endLine\`. Do NOT include the entire file.
+- If the output is getting too long, prioritize Critical and High severity issues.
+- Failure to provide valid, compact JSON will break the IDE dashboard.`;
 
     const raw = await callGemini(CYBER_SYSTEM_PROMPT, userPrompt);
     return parseGeminiJson(raw);
@@ -206,7 +280,7 @@ export async function analyzeProjectWithGrok(
     let currentSize = 0;
 
     for (const file of files) {
-        if (currentSize + file.content.length > 25000 && currentBatch.length > 0) {
+        if (currentSize + file.content.length > 20000 && currentBatch.length > 0) {
             batches.push(currentBatch);
             currentBatch = [];
             currentSize = 0;

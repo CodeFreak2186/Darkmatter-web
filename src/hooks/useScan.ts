@@ -317,41 +317,25 @@ export function useScan() {
         const es = new EventSource(`http://localhost:8000/api/scan/stream/${id}?target=${encodeURIComponent(targetAddr)}&verified=${verified}`);
         eventSourceRef.current = es;
 
+        es.addEventListener('terminal', (e) => {
+            const data = JSON.parse(e.data);
+            if (data.phase === 'analysis' && (data.log.includes('Launching') || data.log.includes('AI Agents'))) {
+                setAgents(prev => prev.map(a => 
+                    a.status === 'pending' ? { ...a, status: 'running', message: 'Analyzing target...' } : a
+                ));
+            }
+        });
+
         es.addEventListener('finding', (e) => {
             const finding: Finding = JSON.parse(e.data);
 
             if (finding.agent) {
-                // Mark agent as running when first finding arrives
-                if (!agentStartTimes[finding.agent]) {
-                    agentStartTimes[finding.agent] = Date.now();
-                    const agentIdx = AGENT_ORDER.indexOf(finding.agent);
-
-                    // Done previous agent
-                    if (currentAgentRef.current >= 0 && currentAgentRef.current !== agentIdx) {
-                        const prevAgent = AGENT_ORDER[currentAgentRef.current];
-                        const prevCount = agentFindingCountsRef.current[prevAgent] || 0;
-                        updateAgent(prevAgent, {
-                            status: 'done',
-                            message: `${prevCount} issue${prevCount !== 1 ? 's' : ''} found`,
-                            findings: prevCount,
-                            time: parseFloat(((Date.now() - (agentStartTimes[prevAgent] || Date.now())) / 1000).toFixed(1)),
-                        });
-                    }
-
-                    if (agentIdx >= 0) {
-                        currentAgentRef.current = agentIdx;
-                        const toolName = AGENT_CONFIG[finding.agent]?.toolName || finding.agent;
-                        updateAgent(finding.agent, {
-                            status: 'running',
-                            message: `Running ${toolName}...`,
-                        });
-                        setOverall(`Running ${toolName}...`);
-                        setProgress(Math.min(90, agentIdx * 18 + 5));
-                        addLog(`[${toolName}] Started against target`, 'info');
-                    }
-                }
-
                 agentFindingCountsRef.current[finding.agent] = (agentFindingCountsRef.current[finding.agent] || 0) + 1;
+                
+                // Update finding count live for the agent
+                updateAgent(finding.agent, {
+                    findings: agentFindingCountsRef.current[finding.agent]
+                });
             }
 
             setFindings(prev => [...prev, finding]);
@@ -375,14 +359,32 @@ export function useScan() {
         });
 
         es.addEventListener('agent_report', (e) => {
-            const report: AgentToolReport = JSON.parse(e.data);
+            const report: AgentToolReport & { status?: string } = JSON.parse(e.data);
             setAgentReports(prev => [...prev, report]);
+            
+            const isError = report.status === 'error';
             updateAgent(report.agentName, {
-                status: 'done',
+                status: isError ? 'error' : 'done',
                 toolCommand: report.toolCommand,
                 time: report.timeTaken,
+                message: isError ? 'Analysis Failed' : `${agentFindingCountsRef.current[report.agentName] || 0} issues found`
             });
-            addLog(`[${report.toolName}] Scan complete in ${report.timeTaken.toFixed(1)}s`, 'success');
+            
+            // Progress logic based on # of agents completed
+            setAgentReports(currentReports => {
+                const completedCount = currentReports.length;
+                const totalAgents = AGENT_ORDER.length;
+                // Scale from 20% (recon done) to 90% (analysis done)
+                const analysisProgress = 20 + Math.round((completedCount / totalAgents) * 70);
+                setProgress(Math.min(90, analysisProgress));
+                return currentReports;
+            });
+
+            if (isError) {
+                addLog(`[${report.toolName}] Agent failed: ${report.toolOutput}`, 'error');
+            } else {
+                addLog(`[${report.toolName}] Scan complete in ${report.timeTaken.toFixed(1)}s`, 'success');
+            }
         });
 
         es.addEventListener('status', (e) => {
