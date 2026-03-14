@@ -166,6 +166,178 @@ function InputPhase({ onScan, history, isLoading, error }: {
     );
 }
 
+// ─── POLICY PHASE ─────────────────────────────────────────────
+function PolicyPhase({ target, onConfirm, onCancel, verificationToken, verificationFilename, isVerified, onCheckVerification, isLoading }: {
+    target: string;
+    onConfirm: (verified: boolean) => void;
+    onCancel: () => void;
+    verificationToken: string | null;
+    verificationFilename: string | null;
+    isVerified: boolean;
+    onCheckVerification: () => Promise<boolean>;
+    isLoading: boolean;
+}) {
+    const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+    const [verifying, setVerifying] = useState(false);
+
+    const handleVerify = async () => {
+        setVerifying(true);
+        const ok = await onCheckVerification();
+        setVerifying(false);
+        if (!ok) alert("Verification file not found or content mismatch. Please follow the instructions.");
+    };
+
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center px-6 relative">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#B6FF2E] rounded-full blur-[300px] opacity-[0.02]" />
+            </div>
+
+            <div className="relative max-w-2xl w-full z-10 animate-in fade-in zoom-in-95 duration-500">
+                <GlassCard className="p-8 lg:p-10 border-[#B6FF2E]/20">
+                    <div className="flex items-center gap-4 mb-8">
+                        <div className="w-12 h-12 rounded-xl bg-[#B6FF2E]/10 flex items-center justify-center border border-[#B6FF2E]/20">
+                            <Shield className="text-[#B6FF2E]" size={24} />
+                        </div>
+                        <div>
+                            <h2 className="font-display font-bold text-3xl text-[#F4F6FF]">Policy Enforcement</h2>
+                            <p className="text-[10px] font-mono text-[#555] mt-1 uppercase tracking-widest">Protocol Delta-7 • Authorization Required</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6 text-[#A7ACBF]">
+                        <p className="text-lg leading-relaxed font-light">
+                            Before scanning <span className="text-[#B6FF2E] font-mono font-medium">{target}</span>, we must establish 
+                            your level of authorization. Security testing without explicit consent is strictly prohibited.
+                        </p>
+
+                        <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] shadow-inner">
+                            <h3 className="text-[#F4F6FF] font-semibold mb-4 text-sm flex items-center gap-2">
+                                <Radio size={14} className="text-[#B6FF2E]" />
+                                DO YOU HAVE EXPLICIT PERMISSION TO ATTACK THIS TARGET?
+                            </h3>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => setHasPermission(true)}
+                                    className={`flex-1 py-4 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${hasPermission === true ? 'bg-[#B6FF2E] text-[#07080B] shadow-[0_0_20px_rgba(182,255,46,0.3)]' : 'bg-white/5 text-[#A7ACBF] hover:bg-white/10 border border-white/5'}`}
+                                >
+                                    <CheckCircle size={18} /> YES, FULL ACCESS
+                                </button>
+                                <button 
+                                    onClick={() => setHasPermission(false)}
+                                    className={`flex-1 py-4 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${hasPermission === false ? 'bg-[#ff5f57] text-white shadow-[0_0_20_rgba(255,95,87,0.3)]' : 'bg-white/5 text-[#A7ACBF] hover:bg-white/10 border border-white/5'}`}
+                                >
+                                    <AlertTriangle size={18} /> NO PERMISSION
+                                </button>
+                            </div>
+                        </div>
+
+                        {hasPermission === true && (
+                            <div className="p-6 rounded-2xl bg-[#B6FF2E]/[0.02] border border-[#B6FF2E]/10 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-[#B6FF2E] font-semibold text-sm flex items-center gap-2">
+                                        <Activity size={16} /> VERIFICATION PROTOCOL
+                                    </h3>
+                                    {isVerified && <span className="px-2 py-0.5 rounded bg-[#4af626]/20 text-[#4af626] text-[10px] font-bold border border-[#4af626]/30">AUTHENTICATED</span>}
+                                </div>
+                                <p className="text-xs mb-5 text-[#888] leading-normal">
+                                    To perform a <span className="text-white font-bold">Deep AI Offensive Scan</span>, upload the following signature to your root directory:
+                                </p>
+                                <div className="space-y-4 font-mono text-[11px] bg-[#07080B] p-5 rounded-xl border border-white/5 shadow-2xl relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-[#B6FF2E]/5 rounded-full blur-2xl group-hover:bg-[#B6FF2E]/10 transition-colors" />
+                                    <div className="flex flex-col gap-3 relative z-10">
+                                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span className="text-[#444] uppercase tracking-tighter">File Path</span>
+                                            <span className="text-[#B6FF2E] font-bold">/{verificationFilename}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[#444] uppercase tracking-tighter">Required Signature</span>
+                                            <span className="text-white bg-white/5 px-2 py-1 rounded select-all border border-white/5">{verificationToken}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex flex-col gap-3">
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <button 
+                                            onClick={handleVerify}
+                                            disabled={verifying || isVerified || isLoading}
+                                            className={`flex-1 py-3.5 rounded-xl transition-all font-bold flex items-center justify-center gap-2 border ${isVerified ? 'bg-transparent border-[#4af626]/30 text-[#4af626]' : 'bg-white/5 border-white/10 text-white hover:bg-white/10 disabled:opacity-50'}`}
+                                        >
+                                            {verifying ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Globe size={16} />}
+                                            {isVerified ? "IDENTITY VERIFIED" : "VERIFY OWNERSHIP"}
+                                        </button>
+                                        
+                                        {!isVerified && (
+                                            <button 
+                                                onClick={() => onConfirm(true)}
+                                                disabled={isLoading}
+                                                className="flex-1 py-3.5 bg-white/5 border border-white/10 text-[#ff9f43] rounded-xl hover:bg-white/10 transition-all font-bold flex items-center justify-center gap-2"
+                                            >
+                                                <Shield size={16} /> SKIP & START FULL SCAN
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <button 
+                                        onClick={() => onConfirm(isVerified)}
+                                        disabled={isLoading}
+                                        className={`w-full py-4 ${isVerified ? 'bg-gradient-to-r from-[#B6FF2E] to-[#8ed615] text-[#07080B]' : 'bg-white/5 border border-white/10 text-[#444]'} rounded-xl hover:brightness-110 transition-all font-bold shadow-[0_10px_30px_rgba(182,255,46,0.15)] flex items-center justify-center gap-2`}
+                                    >
+                                        {isLoading ? "INITIALIZING..." : (
+                                            isVerified ? 
+                                            <>LAUNCH DEEP AI ANALYSIS <Sparkles size={14} /></> : 
+                                            <>START SIMPLE RECONNAISSANCE <Activity size={14} /></>
+                                        )}
+                                    </button>
+                                </div>
+
+                                {!isVerified && (
+                                    <div className="mt-8 p-4 rounded-xl bg-[#ff9f43]/[0.05] border border-[#ff9f43]/20 flex gap-3 items-start animate-in fade-in duration-700">
+                                        <AlertTriangle size={16} className="text-[#ff9f43] shrink-0 mt-0.5" />
+                                        <div className="text-[11px] leading-relaxed text-left">
+                                            <span className="text-[#ff9f43] font-bold uppercase block mb-1">Responsibility Waiver</span>
+                                            <span className="text-[#888]">
+                                                By skipping verification, you assume <span className="text-[#F4F6FF]">full legal and operational responsibility</span> for any impact, disturbances, or results arising from this scan.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {hasPermission === false && (
+                            <div className="p-6 rounded-2xl bg-[#ff5f57]/[0.02] border border-[#ff5f57]/10 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <h3 className="text-[#ff5f57] font-semibold text-sm mb-3 flex items-center gap-2">
+                                    <AlertTriangle size={16} /> SIMPLE SCAN MODE ACTIVE
+                                </h3>
+                                <p className="text-xs mb-6 text-[#888] leading-relaxed">
+                                    As authorization is not confirmed, Darkmatter will execute a <span className="text-white font-bold">Simple Discovery Scan</span>. This is a non-intrusive metadata gathering process. AI exploitation agents and deep payload analysis will be <span className="text-[#ff5f57]">permanently disabled</span> for this session.
+                                </p>
+                                <button 
+                                    onClick={() => onConfirm(false)}
+                                    disabled={isLoading}
+                                    className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl hover:bg-white/10 transition-all font-bold flex items-center justify-center gap-2"
+                                >
+                                    {isLoading ? "INITIALIZING..." : <><Activity size={16} /> PROCEED WITH SIMPLE RECON</>}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button 
+                        onClick={onCancel}
+                        disabled={isLoading}
+                        className="mt-10 text-[#444] hover:text-[#B6FF2E] text-[10px] font-mono uppercase tracking-[.3em] flex items-center gap-2 mx-auto transition-colors"
+                    >
+                        <ArrowLeft size={10} /> ABORT PROTOCOL
+                    </button>
+                </GlassCard>
+            </div>
+        </div>
+    );
+}
+
 // ─── MAIN DASHBOARD ──────────────────────────────────────────
 export default function SecurityDashboard({ onBack }: { onBack?: () => void } = {}) {
     const router = useRouter();
@@ -174,7 +346,8 @@ export default function SecurityDashboard({ onBack }: { onBack?: () => void } = 
     const scan = useScan();
     const { phase, target, agents, logs, progress, overall, findings, riskScore,
         summary, history, isLoading, error, agentReports, allPorts, allDirectories,
-        startScan, resetScan } = scan;
+        verificationToken, verificationFilename, isVerified,
+        startScan, confirmScan, checkVerification, resetScan } = scan;
 
     return (
         <div className="fixed inset-0 z-[200] bg-[#07080B] text-[#F4F6FF] overflow-y-auto" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -194,6 +367,8 @@ export default function SecurityDashboard({ onBack }: { onBack?: () => void } = 
                     <div className="flex items-center gap-2">
                         {phase === 'scanning' ? (
                             <><Radio size={11} className="text-[#ffd93d] animate-pulse" /><span className="text-[11px] font-mono text-[#555]">Scanning</span></>
+                        ) : phase === 'policy' ? (
+                            <><Shield size={11} className="text-[#B6FF2E]" /><span className="text-[11px] font-mono text-[#555]">Policy</span></>
                         ) : (
                             <><CheckCircle size={11} className="text-[#4af626]" /><span className="text-[11px] font-mono text-[#555]">Complete</span></>
                         )}
@@ -202,6 +377,18 @@ export default function SecurityDashboard({ onBack }: { onBack?: () => void } = 
             </div>
 
             {phase === 'input' && <InputPhase onScan={startScan} history={history} isLoading={isLoading} error={error} />}
+            {phase === 'policy' && (
+                <PolicyPhase 
+                    target={target} 
+                    onConfirm={(verified) => confirmScan('full', verified)}
+                    onCancel={resetScan}
+                    verificationToken={verificationToken}
+                    verificationFilename={verificationFilename}
+                    isVerified={isVerified}
+                    onCheckVerification={checkVerification}
+                    isLoading={isLoading}
+                />
+            )}
             {phase === 'scanning' && <ScanningPhase target={target} agents={agents} logs={logs} progress={progress} overall={overall} agentConfig={AGENT_CONFIG} />}
             {phase === 'results' && (
                 <ResultsPhase

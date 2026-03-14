@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scanUploadedFiles } from '@/lib/security/zip-scanner';
 
+import JSZip from 'jszip';
+
 export const maxDuration = 120; // Large uploads may take longer
 
 export async function POST(request: NextRequest) {
@@ -26,13 +28,9 @@ export async function POST(request: NextRequest) {
                     );
                 }
 
-                // For ZIP files, we would need JSZip — for now handle individual files
+                // For ZIP files, handle extraction
                 if (file.name.endsWith('.zip')) {
-                    // Read the ZIP as an ArrayBuffer and try to handle as individual files
-                    // For the MVP, we'll ask the user to upload individual files
-                    // or we can integrate JSZip later
                     try {
-                        const JSZip = (await import('jszip')).default;
                         const arrayBuffer = await file.arrayBuffer();
                         const zip = await JSZip.loadAsync(arrayBuffer);
 

@@ -58,7 +58,7 @@ AGENTS: list[AgentConfig] = [
         build_command=lambda t, d, p: (
             f"nmap {'-sS -T2' if p == 'stealth' else '-F -T4' if p == 'quick' else '-sV -sC -p- -T4 -A'} {d}"
         ),
-        build_prompt=lambda t, d, p: f"Analyze open ports and services for {d}."
+        build_prompt=lambda t, d, p: f"SYSTEM: You are Recon Agent. Analyze open ports and services for {d}. Return findings in RAW JSON format only. NO MARKDOWN. NO COMMENTS. NO TRIALLING TEXT."
     ),
     AgentConfig(
         name="Directory Agent",
@@ -66,7 +66,7 @@ AGENTS: list[AgentConfig] = [
         icon="📁",
         json_key="dir_discovery",
         build_command=lambda t, d, p: f"gobuster dir -u {t} -w common.txt",
-        build_prompt=lambda t, d, p: f"Identify sensitive paths on {d}. Validate signatures for .env, .git, etc."
+        build_prompt=lambda t, d, p: f"SYSTEM: You are Directory Agent. Identify sensitive paths on {d}. Validate signatures for .env, .git, etc. Return findings in RAW JSON format only."
     ),
     AgentConfig(
         name="Header Agent",
@@ -74,7 +74,7 @@ AGENTS: list[AgentConfig] = [
         icon="🌐",
         json_key="headers",
         build_command=lambda t, d, p: f"nikto -h {t} -Tuning 8",
-        build_prompt=lambda t, d, p: f"Scan for security headers on {d}. Validate response status codes."
+        build_prompt=lambda t, d, p: f"SYSTEM: You are Header Agent. Scan for security headers on {d}. Validate response status codes. Return findings in RAW JSON format only."
     ),
     AgentConfig(
         name="Injection Agent",
@@ -82,7 +82,7 @@ AGENTS: list[AgentConfig] = [
         icon="💉",
         json_key="injection",
         build_command=lambda t, d, p: f'sqlmap -u "{t}"',
-        build_prompt=lambda t, d, p: f"Test forms and parameters on {d} for SQLi/XSS/SSRF."
+        build_prompt=lambda t, d, p: f"SYSTEM: You are Injection Agent. Test forms and parameters on {d} for SQLi/XSS/SSRF. Return findings in RAW JSON format only."
     ),
     AgentConfig(
         name="API Agent",
@@ -90,7 +90,7 @@ AGENTS: list[AgentConfig] = [
         icon="🔌",
         json_key="api_security",
         build_command=lambda t, d, p: f"kr scan {t}",
-        build_prompt=lambda t, d, p: f"Scan API endpoints on {d} for IDOR/BOLA using comparison evidence."
+        build_prompt=lambda t, d, p: f"SYSTEM: You are API Agent. Scan API endpoints on {d} for IDOR/BOLA using comparison evidence. Return findings in RAW JSON format only."
     ),
     AgentConfig(
         name="Cloud Agent",

@@ -106,6 +106,14 @@ class Crawler:
             if key not in seen_urls:
                 seen_urls.add(key)
                 unique.append(ep)
+        # Add common endpoints for basic probing
+        base_url = surface.target.rstrip("/")
+        for path in COMMON_ENDPOINTS:
+            ep_url = f"{base_url}{path}"
+            if ep_url not in seen_urls:
+                seen_urls.add(ep_url)
+                unique.append(Endpoint(url=ep_url, source="probe", depth=0))
+
         surface.endpoints = unique
 
         logger.info(
@@ -191,6 +199,9 @@ class Crawler:
             full = urljoin(url, path)
             if full not in surface.api_paths:
                 surface.api_paths.append(full)
+                surface.endpoints.append(Endpoint(
+                    url=full, method="GET", source="js", depth=depth,
+                ))
 
     async def _parse_js(self, client: httpx.AsyncClient, js_url: str, surface: AttackSurface):
         """Parse a JS file for API endpoints."""
@@ -213,6 +224,9 @@ class Crawler:
                 full = urljoin(base, raw)
                 if full not in surface.api_paths:
                     surface.api_paths.append(full)
+                    surface.endpoints.append(Endpoint(
+                        url=full, method="GET", source="js", depth=0,
+                    ))
         except Exception:
             pass
 

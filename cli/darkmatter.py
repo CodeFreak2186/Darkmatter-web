@@ -894,6 +894,59 @@ Examples:
             return f"https://{url}"
         return url
 
+    # Consent form for active scanning commands
+    if args.command in ["scan", "fuzz", "attack", "lifecycle"]:
+        target_url = ensure_http(getattr(args, "target", ""))
+        setattr(args, "target", target_url)
+        console.print()
+        console.rule("[bold red]⚠️  LEGAL CONSENT & LIABILITY AGREEMENT", style="red")
+        console.print(f"  [bold white]Target:[/] {target_url}")
+        console.print("  [bold red]WARNING:[/] Unauthorized scanning is a crime.")
+        
+        from rich.prompt import Prompt
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        ans1 = Prompt.ask("  Do you have permission to scan this target? [y/N]").strip().lower()
+        
+        if ans1 in ['y', 'yes']:
+            console.print("  [bold green][+] Permission confirmed. Protocol Delta-7 Initialized.[/]")
+            import uuid
+            token = str(uuid.uuid4())
+            filename = f"dm-verify-{token[:8]}.txt"
+            console.print(f"  [cyan][?][/] Verifying ownership of {target_url}...")
+            console.print(f"  [bold red][!][/] To perform a FULL DEEP SCAN, upload the following signature to the web root:")
+            console.print(f"      [bold white]File:[/] /{filename}")
+            console.print(f"      [bold white]Content:[/] {token}")
+            console.print()
+            ans2 = Prompt.ask("  Have you uploaded the file? Type [bold]'verify'[/] to check, or [bold]'skip'[/] to bypass").strip().lower()
+            
+            if ans2 == 'verify':
+                import requests
+                console.print(f"  [cyan][*][/] Connecting to {target_url} for signature check...")
+                try:
+                    r = requests.get(f"{target_url}/{filename}", verify=False, timeout=5)
+                    if token in r.text:
+                        console.print("  [bold green][+] Signature matched! Ownership verified.[/]")
+                    else:
+                        console.print("  [bold red][!] Signature NOT found or mismatch. Access denied.[/]")
+                        console.print("  [cyan][*][/] Falling back to Simple Scan Mode.")
+                        if hasattr(args, 'profile'): args.profile = "quick"
+                except Exception:
+                    console.print("  [bold red][!] Network error during verification.[/]")
+                    console.print("  [cyan][*][/] Falling back to Simple Scan Mode.")
+                    if hasattr(args, 'profile'): args.profile = "quick"
+            else:
+                console.print("  [cyan][*][/] Verification Bypassed. Initiating Full Protocol Under Responsibility Waiver.")
+                console.print("  [bold red][!] WARNING: You have assumed full legal/technical responsibility for this scan.[/]")
+        else:
+            console.print("  [bold red][!] No explicit permission confirmed.[/]")
+            console.print("  [bold red][!] WARNING: You are proceeding WITHOUT verified permission.[/]")
+            console.print("  [bold red][!] You assume FULL RESPONSIBILITY for all legal and technical results.[/]")
+            console.print("  [cyan][*][/] Restricted Mode: Proceeding with Simple Reconnaissance Scan.")
+            if hasattr(args, 'profile'): args.profile = "quick"
+
+
     if args.command == "agent":
         tracker.track_action("agent", args.target, {"goal": args.goal})
         agent = RedTeamAgent(api_key=API_KEY)

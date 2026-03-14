@@ -46,7 +46,7 @@ class DarkmatterGuardian:
         try:
             with open(self.audit_log, "r") as f:
                 lines = f.readlines()
-                recent = lines[-20:] # Check last 20 actions
+                recent = lines[max(0, len(lines)-20):] # Check last 20 actions
                 
                 for line in recent:
                     entry = json.loads(line)
@@ -58,3 +58,34 @@ class DarkmatterGuardian:
             return {"status": "safe"}
         except Exception as e:
             return {"status": "error", "reason": str(e)}
+
+    def generate_verification_token(self, target: str) -> str:
+        """Generate a unique verification token for a target."""
+        import hashlib
+        # Deterministic for the same target on the same day
+        salt = os.environ.get("VERIFY_SALT", "darkmatter-v3-salt-2026")
+        date_str = time.strftime('%Y-%m-%d')
+        return hashlib.sha256(f"{target}-{salt}-{date_str}".encode()).hexdigest()[0:16]
+
+    async def verify_permission(self, target: str, token: str) -> bool:
+        """Check if the verification file exists on the target root."""
+        import httpx
+        if not target.startswith("http"):
+            target = f"https://{target}"
+        
+        from urllib.parse import urlparse
+        parsed = urlparse(target)
+        root_url = f"{parsed.scheme}://{parsed.netloc}"
+        verify_url = f"{root_url}/darkmatter-{token}.txt"
+        
+        try:
+            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                response = await client.get(verify_url)
+                if response.status_code == 200:
+                    content = response.text.strip()
+                    # Check if token is in content
+                    return token in content
+        except Exception as e:
+            print(f"Verification fetch failed for {verify_url}: {e}")
+        
+        return False

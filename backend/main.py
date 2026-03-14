@@ -24,7 +24,7 @@ if engine_path not in sys.path:
 # Import engine logic
 from core.fuzzer import FuzzEngine
 from core.executor import AuthConfig
-from agents import get_domain, AGENTS, build_batch_prompt
+from agents import get_domain, AGENTS, build_batch_prompt, DARKMATTER_CORE_RULES
 from core.agent import RedTeamAgent
 from core.crawler import Crawler
 from core.tracker import DarkmatterTracker
@@ -97,8 +97,28 @@ async def start_scan(request: ScanRequest):
 
     return {"jobId": job_id, "status": "initialized", "target": request.target}
 
+@app.get("/api/verify/token")
+def get_verify_token(target: str):
+    token = guardian.generate_verification_token(target)
+    return {"token": token, "filename": f"darkmatter-{token}.txt"}
+
+@app.post("/api/verify/check")
+async def check_verification(request: Request):
+    data = await request.json()
+    target = data.get("target")
+    token = data.get("token")
+    if not target or not token:
+        return {"verified": False, "error": "Missing target or token"}
+    
+    is_verified = await guardian.verify_permission(target, token)
+    return {"verified": is_verified}
+
 @app.get("/api/scan/stream/{job_id}")
-async def stream_scan(request: Request, job_id: str, target: str, mode: str = "scan", profile: str = "quick", goal: Optional[str] = None):
+async def stream_scan(request: Request, job_id: str, target: str, mode: str = "scan", profile: str = "quick", goal: Optional[str] = None, verified: bool = False):
+    if not target:
+        async def error_gen():
+            yield f"event: error\ndata: {json.dumps({'message': 'Invalid target: URL cannot be empty'})}\n\n"
+        return StreamingResponse(error_gen(), media_type="text/event-stream")
     
     async def event_generator():
         queue = asyncio.Queue()
@@ -157,49 +177,98 @@ async def stream_scan(request: Request, job_id: str, target: str, mode: str = "s
                         findings_collector.append(f)
 
                     # 3. Parallel AI Deep Analysis
-                    on_progress("analysis", f"🚀 Launching {len(AGENTS)} AI Agents in Parallel...")
-                    domain = get_domain(target)
-                    context = f"Endpoints: {[e.url for e in surface.endpoints[:10]]}\nTech: {surface.technologies}"
-                    
-                    async def run_agent_and_push(agent, index):
-                        def sync_task():
-                            try:
-                                prompt = agent.build_prompt(target, domain, profile)
-                                if context:
-                                    prompt += f"\n\nREAL RECON CONTEXT:\n{context}"
-                                
-                                raw = RedTeamAgent(api_key=API_KEY)._call_ai(prompt)
-                                first = raw.find("{")
-                                last = raw.rfind("}")
-                                if first != -1 and last != -1:
-                                    data = json.loads(raw[first:last+1])
+                    if verified:
+                        on_progress("analysis", f"🚀 Verified: Launching {len(AGENTS)} AI Agents in Parallel...")
+                        domain = get_domain(target)
+                        context = f"Endpoints: {[e.url for e in surface.endpoints[:10]]}\nTech: {surface.technologies}"
+                        
+                        async def run_agent_and_push(agent, index):
+                            def sync_task():
+                                try:
+                                    agent_task = agent.build_prompt(target, domain, profile)
+                                    prompt = f"{DARKMATTER_CORE_RULES}\nTarget: {target}\nTASK: {agent_task}\nReturn JSON with 'findings' and 'false_positives_removed' lists."
+                                    if context:
+                                        prompt += f"\n\nREAL RECON CONTEXT:\n{context}"
+                                    
+                                    raw = RedTeamAgent(api_key=API_KEY)._call_ai(prompt)
+                                    
+                                    # Robust JSON extraction
+                                    data = {}
+                                    try:
+                                        import re
+                                        fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw, re.IGNORECASE)
+                                        if fenced:
+                                            text = fenced.group(1)
+                                        else:
+                                            text = raw
+
+                                        # Find the start of JSON
+                                        first_brace = text.find("{")
+                                        first_bracket = text.find("[")
+                                        idx = -1
+                                        if first_brace != -1 and first_bracket != -1:
+                                            idx = min(first_brace, first_bracket)
+                                        else:
+                                            idx = max(first_brace, first_bracket)
+                                            
+                                        if idx != -1:
+                                            end_idx = text.rfind("}") if text[idx] == "{" else text.rfind("]")
+                                            if end_idx != -1:
+                                                text = text[idx:end_idx+1]
+                                            else:
+                                                text = text[idx:]
+                                                
+                                        parsed = json.loads(text.strip())
+                                        if isinstance(parsed, list):
+                                            data = {"findings": parsed}
+                                        elif isinstance(parsed, dict):
+                                            data = parsed
+                                    except Exception as je:
+                                        print(f"JSON Parse Error for {agent.name}: {je}")
+                                        print(f"Raw output was: {raw[:100]}...")
+                                        data = {"findings": []}
+                                        
                                     return data.get("findings", [])
-                            except Exception as e:
-                                print(f"Agent {agent.name} error: {e}")
-                            return []
+                                except Exception as e:
+                                    print(f"Agent {agent.name} error: {e}")
+                                return []
 
-                        # Run the sync AI call in a separate thread to keep SSE flowing
-                        findings = await asyncio.to_thread(sync_task)
-                        
-                        on_progress("analysis", f"Agent {agent.name} complete ({len(findings)} findings).")
-                        push_event("terminal", {"phase": "analysis", "log": f"[{agent.icon}] {agent.name} finished."})
-                        
-                        for f in findings:
-                            finding = {
-                                "severity": str(f.get("severity", "medium")).lower(),
-                                "title": f.get("title", f"{agent.name} Finding"),
-                                "endpoint": f.get("endpoint", "/"),
-                                "path": f.get("endpoint", "/"),
-                                "description": f.get("description", ""),
-                                "tool": agent.tool_name,
-                                "agent": agent.name
-                            }
-                            push_event("finding", finding, sync_db=True)
-                            findings_collector.append(finding)
+                            # Run the sync AI call in a separate thread to keep SSE flowing
+                            findings = await asyncio.to_thread(sync_task)
+                            
+                            on_progress("analysis", f"Agent {agent.name} complete ({len(findings)} findings).")
+                            push_event("terminal", {"phase": "analysis", "log": f"[{agent.icon}] {agent.name} finished."})
+                            
+                            # Start time tracking for UI
+                            import time
+                            # We can approximate time or just return 0, but ideally we'd track it
+                            elapsed = time.time() - start_time
+                            push_event("agent_report", {
+                                "agentName": agent.name,
+                                "toolName": agent.tool_name,
+                                "toolOutput": f"{len(findings)} findings discovered",
+                                "timeTaken": elapsed
+                            })
+                            
+                            for f in findings:
+                                finding = {
+                                    "severity": str(f.get("severity", "medium")).lower(),
+                                    "title": f.get("title", f"{agent.name} Finding"),
+                                    "endpoint": f.get("endpoint", "/"),
+                                    "path": f.get("endpoint", "/"),
+                                    "description": f.get("description", ""),
+                                    "tool": agent.tool_name,
+                                    "agent": agent.name
+                                }
+                                push_event("finding", finding, sync_db=True)
+                                findings_collector.append(finding)
 
-                    # Launch all agents as concurrent tasks
-                    agent_tasks = [run_agent_and_push(a, i) for i, a in enumerate(AGENTS)]
-                    await asyncio.gather(*agent_tasks)
+                        # Launch all agents as concurrent tasks
+                        agent_tasks = [run_agent_and_push(a, i) for i, a in enumerate(AGENTS)]
+                        await asyncio.gather(*agent_tasks)
+                    else:
+                        on_progress("analysis", "🛡️ Unverified Target: Deep AI Analysis Restricted. Simple scan mode enabled.")
+                        push_event("terminal", {"phase": "analysis", "log": "[!] Deep scan requires ownership verification. File missing on target."})
 
                 elif mode == "fuzz":
                     engine = FuzzEngine(target=target, profile=profile, on_progress=on_progress)

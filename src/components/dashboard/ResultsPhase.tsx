@@ -1,4 +1,4 @@
-gi"use client"
+"use client"
 
 import { useState } from 'react';
 import {
@@ -387,7 +387,7 @@ export function ResultsPhase({
                                     <Shield size={13} className="text-[#B6FF2E] shrink-0" />
                                     <div className="flex-1 min-w-0">
                                         <div className="text-[12px] text-[#F4F6FF] font-medium">{r.toolName}</div>
-                                        <div className="text-[10px] text-[#444] font-mono truncate">{r.toolCommand.slice(0, 40)}...</div>
+                                        <div className="text-[10px] text-[#444] font-mono truncate">{(r.toolCommand || '').slice(0, 40)}...</div>
                                     </div>
                                     <span className="text-[10px] font-mono text-[#555] shrink-0">{r.timeTaken.toFixed(1)}s</span>
                                 </div>

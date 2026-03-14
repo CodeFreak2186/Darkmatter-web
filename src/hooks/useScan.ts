@@ -10,7 +10,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────
 
-export type ScanPhase = 'input' | 'scanning' | 'results';
+export type ScanPhase = 'input' | 'policy' | 'scanning' | 'results';
 export type ScanStatus = 'pending' | 'running' | 'complete' | 'error';
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -160,6 +160,9 @@ export function useScan() {
     const [agentReports, setAgentReports] = useState<AgentToolReport[]>([]);
     const [allPorts, setAllPorts] = useState<PortResult[]>([]);
     const [allDirectories, setAllDirectories] = useState<DirResult[]>([]);
+    const [verificationToken, setVerificationToken] = useState<string | null>(null);
+    const [verificationFilename, setVerificationFilename] = useState<string | null>(null);
+    const [isVerified, setIsVerified] = useState(false);
 
     const eventSourceRef = useRef<EventSource | null>(null);
     const currentAgentRef = useRef<number>(-1);
@@ -192,12 +195,60 @@ export function useScan() {
 
     useEffect(() => { loadHistory(); }, [loadHistory]);
 
+    // ─── Verification ──────────────────────────────────────
+
+    const fetchVerificationToken = useCallback(async (url: string) => {
+        try {
+            const res = await fetch(`http://localhost:8000/api/verify/token?target=${encodeURIComponent(url)}`);
+            if (res.ok) {
+                const data = await res.json();
+                setVerificationToken(data.token);
+                setVerificationFilename(data.filename);
+            }
+        } catch (err) {
+            console.error('Failed to fetch verification token', err);
+        }
+    }, []);
+
+    const checkVerification = useCallback(async () => {
+        if (!target || !verificationToken) return false;
+        try {
+            const res = await fetch('http://localhost:8000/api/verify/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, token: verificationToken }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setIsVerified(data.verified);
+                return data.verified;
+            }
+        } catch (err) {
+            console.error('Verification check failed', err);
+        }
+        return false;
+    }, [target, verificationToken]);
+
     // ─── Start scan ────────────────────────────────────────
 
     const startScan = useCallback(async (url: string, profile = 'full') => {
         setIsLoading(true);
         setError(null);
+        setTarget(url);
+        setIsVerified(false);
+        setVerificationToken(null);
+        
+        // Enter policy phase first
+        setPhase('policy');
+        await fetchVerificationToken(url);
+        setIsLoading(false);
+    }, [fetchVerificationToken]);
+
+    const confirmScan = useCallback(async (profile = 'full', verified = false) => {
+        setIsLoading(true);
+        setError(null);
         setFindings([]);
+        setAgentReports([]);
         setLogs([]);
         setProgress(0);
         setRiskScore(null);
@@ -219,10 +270,12 @@ export function useScan() {
         agentFindingCountsRef.current = {};
 
         try {
-            const res = await fetch('/api/scan/start', {
+            // Note: We use the actual API URL here. 
+            // In a real app this would be proxied or use base URL.
+            const res = await fetch('http://localhost:8000/api/scan/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target: url, profile }),
+                body: JSON.stringify({ target, profile }),
             });
 
             if (!res.ok) {
@@ -231,32 +284,37 @@ export function useScan() {
             }
 
             const data = await res.json();
-            setScanId(data.scanId);
-            setTarget(data.target);
+            setScanId(data.jobId);
             setPhase('scanning');
             setStatus('running');
             setIsLoading(false);
 
             addLog(`DARKMATTER AI Security Scanner initialized`, 'info');
-            addLog(`Target: ${data.target}`, 'info');
-            addLog(`Profile: ${profile} | Tools: Nmap, Gobuster, Nikto, SQLMap, Metasploit, testssl, Amass, Burp Suite`, 'info');
-            addLog(`Launching 8 specialized security agents...`, 'info');
+            addLog(`Target: ${target}`, 'info');
+            addLog(`Profile: ${profile} | Mode: ${verified ? 'Verification Confirmed (Full Scan)' : 'Unverified (Simple Scan)'}`, 'info');
+            
+            if (verified) {
+                addLog(`Launching 8 specialized security agents...`, 'info');
+            } else {
+                addLog(`Running in Simple Mode - 2 specialized security agents only.`, 'info');
+            }
 
-            startStreaming(data.scanId);
+            startStreaming(data.jobId, target, verified);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error');
             setIsLoading(false);
         }
-    }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [addLog, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ─── SSE Streaming ────────────────────────────────────
 
-    const startStreaming = useCallback((id: string) => {
+    const startStreaming = useCallback((id: string, targetAddr: string, verified = false) => {
         if (eventSourceRef.current) eventSourceRef.current.close();
 
         const agentStartTimes: Record<string, number> = {};
 
-        const es = new EventSource(`/api/scan/${id}/stream`);
+        // Added verified parameter to stream URL
+        const es = new EventSource(`http://localhost:8000/api/scan/stream/${id}?target=${encodeURIComponent(targetAddr)}&verified=${verified}`);
         eventSourceRef.current = es;
 
         es.addEventListener('finding', (e) => {
@@ -373,7 +431,7 @@ export function useScan() {
         es.onerror = () => {
             if (status === 'running') addLog('Connection interrupted...', 'warn');
         };
-    }, [addLog, updateAgent, loadHistory]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [addLog, updateAgent, loadHistory, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ─── Fetch final results ───────────────────────────────
 
@@ -436,6 +494,7 @@ export function useScan() {
         phase, target, scanId, status, findings, agents, logs, progress,
         riskScore, history, overall, summary, isLoading, error,
         agentReports, allPorts, allDirectories,
-        startScan, resetScan, loadHistory,
+        verificationToken, verificationFilename, isVerified,
+        startScan, confirmScan, checkVerification, resetScan, loadHistory,
     };
 }

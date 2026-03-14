@@ -88,6 +88,10 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
     const [history, setHistory] = useState<string[]>([]);
     const [histIdx, setHistIdx] = useState(-1);
     const [scanRunning, setScanRunning] = useState(false);
+    const [terminalState, setTerminalState] = useState<'normal' | 'await_permission' | 'await_verification'>('normal');
+    const [pendingTarget, setPendingTarget] = useState('');
+    const [pendingToken, setPendingToken] = useState('');
+    const [pendingFilename, setPendingFilename] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const eventSourceRef = useRef<EventSource | null>(null);
@@ -131,7 +135,7 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
 
     // ── Real scan via API + SSE streaming ──────────────────────
 
-    const runRealScan = useCallback(async (target: string, profile = 'full') => {
+    const runRealScan = useCallback(async (target: string, profile = 'full', verified = false) => {
         if (scanRunning) {
             addLine('[!] A scan is already running. Wait for it to finish.', 'error');
             return;
@@ -148,22 +152,32 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
         addLines([
             { text: '', type: 'output' },
             { text: '════════════════════════════════════════════════════════════', type: 'banner' },
-            { text: `[Scan] Target: ${url}  |  Profile: ${profile}`, type: 'info' },
+            { text: `[Scan] Target: ${url}  |  Profile: ${profile}  |  Verified: ${verified}`, type: 'info' },
             { text: '════════════════════════════════════════════════════════════', type: 'banner' },
             { text: '', type: 'output' },
         ]);
 
         // Print every agent + its exact command
-        for (const agent of cmds) {
+        if (verified) {
+            for (const agent of cmds) {
+                addLines([
+                    { text: `[${agent.name}] ▶ Running:`, type: 'info' },
+                    { text: `  $ ${agent.cmd}`, type: 'output' },
+                    { text: '', type: 'output' },
+                ]);
+            }
+        } else {
             addLines([
-                { text: `[${agent.name}] ▶ Running:`, type: 'info' },
-                { text: `  $ ${agent.cmd}`, type: 'output' },
+                { text: `[Nmap Agent] ▶ Running:`, type: 'info' },
+                { text: `  $ nmap -sS -T4 ${domain}`, type: 'output' },
+                { text: '', type: 'output' },
+                { text: `[Dirb Agent] ▶ Running:`, type: 'info' },
+                { text: `  $ gobuster dir -u ${url} -w /usr/share/wordlists/dirb/common.txt`, type: 'output' },
                 { text: '', type: 'output' },
             ]);
         }
 
-        addLine('[Batch] Sending 1 batched request for all 8 agents (free-tier safe)...', 'info');
-        addLine('[Batch] Waiting for Gemini response...', 'output');
+        addLine('[Batch] Initializing scan engine...', 'info');
         addLine('', 'output');
 
         // ── Fire the API call to Local FastAPI Backend ──
@@ -184,7 +198,7 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
             const { jobId } = await res.json();
 
             // ── Stream SSE results live from FastAPI ──
-            const es = new EventSource(`http://localhost:8000/api/scan/stream/${jobId}?target=${encodeURIComponent(url)}&profile=${profile}`);
+            const es = new EventSource(`http://localhost:8000/api/scan/stream/${jobId}?target=${encodeURIComponent(url)}&profile=${profile}&verified=${verified}`);
             eventSourceRef.current = es;
 
             const agentFindingCounts: Record<string, number> = {};
@@ -298,6 +312,64 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
 
         const output: TermLine[] = [];
 
+        if (terminalState === 'await_permission') {
+            if (trimmed.toLowerCase() === 'y' || trimmed.toLowerCase() === 'yes') {
+                addLine('[+] Permission confirmed. Protocol Delta-7 Initialized.', 'success');
+                addLine('[?] Verifying ownership of ' + pendingTarget + '...', 'info');
+                addLine('[!] To perform a FULL DEEP SCAN, upload the following signature:', 'output');
+                addLine('    File: /' + pendingFilename, 'info');
+                addLine('    Content: ' + pendingToken, 'info');
+                addLine('', 'output');
+                addLine('[?] Have you uploaded the file? Type "verify" or "skip" to start full scan.', 'info');
+                setTerminalState('await_verification');
+            } else {
+                addLine('[!] No explicit permission confirmed.', 'error');
+                addLine('[!] WARNING: You are proceeding WITHOUT verified permission.', 'error');
+                addLine('[!] You assume FULL RESPONSIBILITY for all legal and technical results.', 'error');
+                addLine('[*] Restricted Mode: Proceeding with Simple Reconnaissance Scan.', 'info');
+                runRealScan(pendingTarget, 'quick', false);
+                setTerminalState('normal');
+            }
+            return;
+        }
+
+        if (terminalState === 'await_verification') {
+            if (trimmed.toLowerCase() === 'verify') {
+                addLine('[*] Connecting to ' + pendingTarget + ' for signature check...', 'info');
+                const verify = async () => {
+                    try {
+                        const res = await fetch('http://localhost:8000/api/verify/check', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ target: pendingTarget, token: pendingToken }),
+                        });
+                        const data = await res.json();
+                        if (data.verified) {
+                            addLine('[+] Signature matched! Ownership verified.', 'success');
+                            addLine('[*] Launching Full AI Deep Analysis.', 'success');
+                            runRealScan(pendingTarget, 'full', true);
+                        } else {
+                            addLine('[!] Signature NOT found or mismatch. Access denied.', 'error');
+                            addLine('[*] Falling back to Simple Scan Mode.', 'info');
+                            runRealScan(pendingTarget, 'quick', false);
+                        }
+                    } catch (err) {
+                        addLine('[!] Network error during verification.', 'error');
+                        runRealScan(pendingTarget, 'quick', false);
+                    }
+                    setTerminalState('normal');
+                };
+                verify();
+            } else {
+                addLine('[*] Verification Bypassed. Initiating Full Protocol Under Responsibility Waiver.', 'info');
+                addLine('[!] WARNING: You have assumed full legal/technical responsibility for this scan.', 'error');
+                addLine('[*] Launching Full AI Deep Analysis.', 'success');
+                runRealScan(pendingTarget, 'full', true);
+                setTerminalState('normal');
+            }
+            return;
+        }
+
         switch (command) {
             case 'help':
                 output.push(
@@ -341,7 +413,7 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                 return;
 
             case 'ls': {
-                const target = args[0] ? (args[0].startsWith('/') ? args[0] : `${cwd} /${args[0]}`.replace(/\/+/g, '/')) : cwd;
+                const target = args[0] ? (args[0].startsWith('/') ? args[0] : `${cwd}/${args[0]}`.replace(/\/+/g, '/')) : cwd;
                 const contents = FS[target];
                 if (contents) {
                     const formatted = contents.map(item => {
@@ -480,8 +552,35 @@ export default function KaliTerminal({ onBack }: { onBack?: () => void } = {}) {
                     output.push({ text: `  Example: ${command} https://example.com`, type: 'output' });
                     break;
                 }
+                
+                let cleanTarget = target.trim();
+                if (!cleanTarget.startsWith('http')) cleanTarget = 'https://' + cleanTarget;
+                
+                setPendingTarget(cleanTarget);
+                setTerminalState('await_permission');
+                
+                const fetchInfo = async () => {
+                    try {
+                        const res = await fetch(`http://localhost:8000/api/verify/token?target=${encodeURIComponent(cleanTarget)}`);
+                        const data = await res.json();
+                        setPendingToken(data.token);
+                        setPendingFilename(data.filename);
+                    } catch (err) {}
+                };
+                fetchInfo();
+
+                output.push(
+                    { text: '════════════════════════════════════════════════════════════', type: 'banner' },
+                    { text: '  POLICY ENFORCEMENT & AUTHORIZATION', type: 'info' },
+                    { text: '════════════════════════════════════════════════════════════', type: 'banner' },
+                    { text: `  Target: ${cleanTarget}`, type: 'output' },
+                    { text: '', type: 'output' },
+                    { text: '  [!] DO YOU HAVE EXPLICIT PERMISSION TO ATTACK THIS TARGET?', type: 'error' },
+                    { text: '  Security testing without consent is illegal and prohibited.', type: 'output' },
+                    { text: '  By proceeding, you assume full responsibility for all results.', type: 'output' },
+                    { text: '  Please confirm (y/n):', type: 'info' },
+                );
                 addLines(output);
-                runRealScan(target, args[1] || 'full');
                 return;
             }
 

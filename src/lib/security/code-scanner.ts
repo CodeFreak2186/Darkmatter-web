@@ -2,7 +2,7 @@
 // Regex-based quick scan + Gemini AI deep analysis
 
 import { Finding, Severity } from './types';
-import { analyzeCodeWithGrok } from './grok-client';
+import { analyzeProjectWithGrok } from './grok-client';
 
 interface CodeFile {
     path: string;
@@ -257,6 +257,7 @@ function regexScanFile(file: CodeFile): Finding[] {
                 remediation: pattern.remediation,
                 evidence: lineContent.substring(0, 200),
                 cwe: pattern.cwe,
+                line: lineNumber,
             });
 
             // Prevent infinite loops with zero-length matches
@@ -279,14 +280,16 @@ export async function scanCode(
     const allFindings: Finding[] = [];
 
     // Phase 1: Regex-based quick scan
-    onProgress?.('Running pattern-based security scan...');
+    if (!useAI) {
+        onProgress?.('Running pattern-based security scan...');
 
-    for (const file of files) {
-        const fileFindings = regexScanFile(file);
-        allFindings.push(...fileFindings);
+        for (const file of files) {
+            const fileFindings = regexScanFile(file);
+            allFindings.push(...fileFindings);
+        }
+
+        onProgress?.(`Pattern scan complete. Found ${allFindings.length} issues.`);
     }
-
-    onProgress?.(`Pattern scan complete. Found ${allFindings.length} issues.`);
 
     // Phase 2: Gemini AI deep analysis
     if (useAI) {
@@ -302,15 +305,11 @@ export async function scanCode(
             });
 
             if (scannableFiles.length > 0) {
-                const grokAnalysis = await analyzeCodeWithGrok(scannableFiles);
+                const grokAnalysis = await analyzeProjectWithGrok(scannableFiles);
 
-                // Merge (deduplicate by title + endpoint)
-                const existingKeys = new Set(allFindings.map(f => `${f.title.toLowerCase()}|${f.endpoint.toLowerCase()}`));
+                // Add all AI findings
                 for (const grokFinding of grokAnalysis.findings) {
-                    const key = `${grokFinding.title.toLowerCase()}|${grokFinding.endpoint.toLowerCase()}`;
-                    if (!existingKeys.has(key)) {
-                        allFindings.push({ ...grokFinding, id: 0 });
-                    }
+                    allFindings.push({ ...grokFinding, id: 0 });
                 }
 
                 onProgress?.(`AI analysis complete. Total: ${allFindings.length} findings.`);
