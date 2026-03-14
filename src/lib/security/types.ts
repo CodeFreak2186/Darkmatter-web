@@ -20,6 +20,10 @@ export interface Finding {
   remediation?: string;
   evidence?: string;
   cwe?: string;
+  line?: number;
+  endLine?: number;
+  fixSnippet?: string;
+  risk?: string;
 }
 
 export interface ScanRequest {
@@ -60,6 +64,10 @@ export interface GrokAnalysis {
     remediation: string;
     evidence: string;
     cwe: string;
+    line?: number;
+    endLine?: number;
+    fixSnippet?: string;
+    risk?: string;
   }[];
   summary: string;
   riskScore: number;

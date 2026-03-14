@@ -3,7 +3,7 @@
 
 import { GrokAnalysis, Severity } from './types';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function getApiKey(): string {
     const key = process.env.GEMINI_API_KEY;
@@ -34,7 +34,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
             ],
             generationConfig: {
                 temperature: 0.3,
-                maxOutputTokens: 4096,
+                maxOutputTokens: 8192,
                 responseMimeType: 'application/json',
             },
         }),
@@ -69,6 +69,10 @@ function parseGeminiJson(raw: string): GrokAnalysis {
                 remediation: (f.remediation as string) || '',
                 evidence: (f.evidence as string) || '',
                 cwe: (f.cwe as string) || '',
+                line: (f.line as number) || undefined,
+                endLine: (f.endLine as number) || undefined,
+                fixSnippet: (f.fixSnippet as string) || undefined,
+                risk: (f.risk as string) || undefined,
             })),
             summary: parsed.summary || '',
             riskScore: parsed.riskScore || 0,
@@ -81,27 +85,31 @@ function parseGeminiJson(raw: string): GrokAnalysis {
 
 // ─── Cybersecurity System Prompt ─────────────────────────────
 
-const CYBER_SYSTEM_PROMPT = `You are Darkmatter AI, an elite cybersecurity engineer and penetration tester. You analyze targets with extreme thoroughness, identifying vulnerabilities that others miss.
+const CYBER_SYSTEM_PROMPT = `You are a dedicated "Security Copilot" for the Darkmatter Web IDE. Your sole purpose is to analyze code ONLY from a cybersecurity perspective.
 
-Your role:
-- Analyze security data like a professional red team operator
-- Identify OWASP Top 10 vulnerabilities, misconfigurations, and attack surfaces
-- Provide actionable remediation with code examples when possible
-- Rate severity accurately: critical (RCE, auth bypass), high (SQLi, XSS), medium (misconfig), low (info disclosure), info (reconnaissance)
-- Reference CWE IDs when applicable
+CRITICAL INSTRUCTIONS:
+- strictly restrict analysis to security vulnerabilities ONLY.
+- Do NOT analyze syntax errors, formatting issues, linting problems, or general programming mistakes.
+- Do NOT show style suggestions, performance optimizations unrelated to security, or general code refactoring.
+- Identify OWASP Top 10 vulnerabilities, misconfigurations, and attack surfaces (e.g. Hardcoded credentials, Weak auth, Unprotected endpoints, SQLi, Command injection, Insecure sessions, XSS, CSRF, Misconfigured CORS, Unsafe file uploads).
+- Improve existing security code: If the code uses weak practices (e.g. MD5/SHA1), suggest stronger alternatives (e.g. bcrypt).
 
-ALWAYS respond with valid JSON in this exact format:
+Provide your findings as valid JSON exactly in this format:
 {
   "findings": [
     {
       "severity": "critical|high|medium|low|info",
-      "title": "Short vulnerability title",
+      "title": "Short vulnerability title (e.g., SQL Injection Risk)",
       "endpoint": "Affected endpoint or file path",
-      "description": "Detailed description of the vulnerability",
-      "agent": "Discovery Agent|Fuzzing Agent|Auth Agent|Config Agent|Code Agent|AI Agent",
-      "remediation": "How to fix this issue",
+      "description": "What is the vulnerability? (e.g., User input is directly concatenated into the SQL query.)",
+      "risk": "Why is it dangerous? (e.g., Attackers could manipulate queries...)",
+      "remediation": "How to fix this issue (e.g., Use parameterized queries)",
+      "agent": "Code Agent",
       "evidence": "Proof or indicator of the vulnerability",
-      "cwe": "CWE-XXX"
+      "cwe": "CWE-XXX",
+      "line": 42,
+      "endLine": 44,
+      "fixSnippet": "import { rateLimit } from 'express-rate-limit';\\nconst limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });\\napp.use(limiter);"
     }
   ],
   "summary": "Brief overall security assessment",
@@ -154,28 +162,32 @@ export async function analyzeCodeWithGrok(
         return `### File: ${f.path} (${f.language || 'unknown'})\n\`\`\`\n${truncated}\n\`\`\``;
     }).join('\n\n');
 
-    const userPrompt = `Perform a comprehensive security code review of the following source files. Act as a senior security engineer conducting a SAST (Static Application Security Testing) audit.
+    const userPrompt = `Perform a comprehensive security code review of the following source files. Act as a dedicated "Security Copilot" for the Darkmatter Web IDE.
 
 ${filesSummary}
 
-Analyze for:
-1. Hardcoded secrets (API keys, passwords, tokens, private keys)
-2. SQL Injection vulnerabilities
-3. Cross-Site Scripting (XSS)
-4. Command Injection / OS Command Execution
-5. Path Traversal
-6. Insecure Deserialization
-7. Weak Cryptography (MD5, SHA1 for passwords, weak random)
-8. Insecure file operations
-9. Missing input validation
-10. Authentication/Authorization flaws
-11. Insecure dependencies or imports
-12. Debug code left in production
-13. SSRF vulnerabilities
-14. Race conditions
-15. Any other security issues
+Analyze strictly for:
+1. Hardcoded credentials or secrets
+2. Weak authentication or authorization logic
+3. Unprotected API endpoints
+4. Missing input validation or sanitization
+5. SQL injection vulnerabilities
+6. Command injection risks
+7. Insecure session handling
+8. Static or predictable hashes/tokens
+9. Exposure of database credentials
+10. Unsafe file uploads
+11. Cross-site scripting (XSS)
+12. CSRF vulnerabilities
+13. Insecure cryptographic implementations
+14. Misconfigured CORS
+15. Unsafe environment variable handling
+16. Any other security and ONLY security issues.
 
-Be precise and reference exact line numbers or code patterns as evidence. Only report real vulnerabilities found in the code.`;
+CRITICAL INSTRUCTIONS:
+- Do NOT report syntax errors, linting issues, missing generic imports, or normal programming bugs.
+- Limit your report to a MAXIMUM of the 7 most severe vulnerabilities across all files combined to prevent JSON truncation.
+- Be precise and reference exact line numbers. YOU MUST under ALL circumstances provide an exact code replacement in the \`fixSnippet\` field that correctly patches the vulnerability. Even for hardcoded passwords/keys, provide the snippet that uses \`os.getenv()\` or \`process.env\`. You MUST also correctly define \`line\` and \`endLine\` for where the replacement goes! Failure to provide \`fixSnippet\` will break the IDE.`;
 
     const raw = await callGemini(CYBER_SYSTEM_PROMPT, userPrompt);
     return parseGeminiJson(raw);
@@ -188,40 +200,34 @@ export async function analyzeProjectWithGrok(
     projectContext: string = ''
 ): Promise<GrokAnalysis> {
     // For large projects, batch files and summarize
-    const totalSize = files.reduce((sum, f) => sum + f.content.length, 0);
+    // Split into smaller batches to prevent output truncation
+    const batches: typeof files[] = [];
+    let currentBatch: typeof files = [];
+    let currentSize = 0;
 
-    if (totalSize > 15000) {
-        // Split into batches and analyze
-        const batches: typeof files[] = [];
-        let currentBatch: typeof files = [];
-        let currentSize = 0;
-
-        for (const file of files) {
-            if (currentSize + file.content.length > 12000 && currentBatch.length > 0) {
-                batches.push(currentBatch);
-                currentBatch = [];
-                currentSize = 0;
-            }
-            currentBatch.push(file);
-            currentSize += file.content.length;
+    for (const file of files) {
+        if (currentSize + file.content.length > 25000 && currentBatch.length > 0) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentSize = 0;
         }
-        if (currentBatch.length > 0) batches.push(currentBatch);
+        currentBatch.push(file);
+        currentSize += file.content.length;
+    }
+    if (currentBatch.length > 0) batches.push(currentBatch);
 
-        // Analyze each batch
-        const allFindings: GrokAnalysis['findings'] = [];
-        for (const batch of batches) {
-            const result = await analyzeCodeWithGrok(batch);
-            allFindings.push(...result.findings);
-        }
-
-        return {
-            findings: allFindings,
-            summary: `Analyzed ${files.length} files across ${batches.length} batches.`,
-            riskScore: Math.min(100, allFindings.filter(f => f.severity === 'critical').length * 25 +
-                allFindings.filter(f => f.severity === 'high').length * 15 +
-                allFindings.filter(f => f.severity === 'medium').length * 5),
-        };
+    // Analyze each batch sequentially (to respect free tier rate limits)
+    const allFindings: GrokAnalysis['findings'] = [];
+    for (const batch of batches) {
+        const result = await analyzeCodeWithGrok(batch);
+        allFindings.push(...result.findings);
     }
 
-    return analyzeCodeWithGrok(files);
+    return {
+        findings: allFindings,
+        summary: `Analyzed ${files.length} files across ${batches.length} batches.`,
+        riskScore: Math.min(100, allFindings.filter(f => f.severity === 'critical').length * 25 +
+            allFindings.filter(f => f.severity === 'high').length * 15 +
+            allFindings.filter(f => f.severity === 'medium').length * 5),
+    };
 }
