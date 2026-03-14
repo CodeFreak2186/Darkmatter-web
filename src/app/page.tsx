@@ -41,12 +41,8 @@ function Navigation() {
       <div className="flex items-center justify-between px-6 lg:px-12 py-5">
         <div className="font-display font-bold text-xl tracking-tight text-[#F4F6FF]">Darkmatter</div>
         <div className="hidden lg:flex items-center gap-10">
-          <button onClick={() => go('capabilities')} className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors">Product</button>
-          <button onClick={() => go('stats')} className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors">Stats</button>
-          <button onClick={() => go('threat-map')} className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors">Threat Map</button>
-          <Link href="/dashboard" className="text-sm text-[#ff9f43] hover:text-white transition-colors flex items-center gap-1.5 font-medium"><Activity size={15} /> Dashboard</Link>
-          <Link href="/terminal" className="text-sm text-[#4af626] hover:text-white transition-colors flex items-center gap-1.5 font-medium"><Terminal size={15} /> Terminal</Link>
-          <Link href="/ide" className="text-sm text-[#B6FF2E] hover:text-white transition-colors flex items-center gap-1.5 font-medium"><Code size={15} /> Web IDE</Link>
+          <Link href="/about" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">About</Link>
+          <Link href="/guide" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">Guide</Link>
         </div>
         <div className="hidden lg:flex items-center gap-3">
           <Link href="/dashboard" className="px-4 py-2.5 border border-[#ff9f43]/80 text-[#ff9f43] text-sm font-semibold hover:bg-[#ff9f43]/10 transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-1.5"><Activity size={15} /> Dashboard</Link>
