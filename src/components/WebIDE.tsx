@@ -7,9 +7,22 @@ import {
     ChevronRight, ChevronDown, File, Folder, FolderOpen, X, Terminal as TerminalIcon,
     Settings, Search, GitBranch, Bug, Boxes, PanelLeft,
     Plus, MoreHorizontal, ArrowLeft, Bell, Wifi, CheckCircle,
+<<<<<<< HEAD
     Upload, Shield, Loader2, FolderUp
 } from 'lucide-react';
 
+=======
+    Upload, Shield, Loader2, FolderUp, Copy, Check
+} from 'lucide-react';
+
+declare global {
+    interface Window {
+        __darkmatterCodeLensRegistered?: boolean;
+        __darkmatterApplyFixCallback?: (finding: any) => void;
+    }
+}
+
+>>>>>>> main
 // ─── File System ─────────────────────────────────────────────
 interface FSNode {
     name: string;
@@ -174,6 +187,7 @@ function FileTreeNode({ node, depth, path, onOpen, activeFile }: {
     );
 }
 
+<<<<<<< HEAD
 // ─── Terminal with Scan Results ──────────────────────────────
 function TerminalPanel({ lines, input, setInput, onSubmit }: {
     lines: string[];
@@ -218,6 +232,141 @@ function TerminalPanel({ lines, input, setInput, onSubmit }: {
                     className="flex-1 bg-transparent text-[#ccc] outline-none text-[13px]"
                     placeholder="Type a command..."
                 />
+=======
+// ─── Security Copilot Components ───────────────────────────
+function SnippetBlock({ snippet, endpoint }: { snippet: string, endpoint: string }) {
+    const [copied, setCopied] = useState(false);
+    
+    // basic language from endpoint
+    const ext = endpoint.split('.').pop() || '';
+    
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(snippet.replace(/\\n/g, '\n'));
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="mt-3 mb-3">
+            <div className="text-[#ccc] text-xs mb-2 leading-relaxed">
+                <strong className="text-white">Secure Fix Snippet:</strong>
+            </div>
+            <div className="relative group rounded-md overflow-hidden border border-[#1e2030] bg-[#0a0c14]">
+                <div className="flex justify-between items-center px-2 py-1 bg-[#12141f] border-b border-[#1e2030]">
+                    <span className="text-[10px] text-[#888] uppercase">{ext || 'code'}</span>
+                    <button 
+                        onClick={copyToClipboard}
+                        className="text-[#888] hover:text-white transition-colors flex items-center gap-1 text-[10px]"
+                    >
+                        {copied ? <Check size={12} className="text-[#B6FF2E]" /> : <Copy size={12} />}
+                        {copied ? <span className="text-[#B6FF2E]">Copied</span> : 'Copy'}
+                    </button>
+                </div>
+                <pre className="p-3 overflow-x-auto text-[11px] font-mono text-[#B6FF2E] leading-relaxed whitespace-pre-wrap">
+                    <code>{snippet.replace(/\\n/g, '\n')}</code>
+                </pre>
+            </div>
+        </div>
+    );
+}
+
+// ─── Security Copilot Panel ──────────────────────────────
+function SecurityPanel({ findings, scanning, onNavigate, onFix }: {
+    findings: any[];
+    scanning: boolean;
+    onNavigate: (endpoint: string, line?: number) => void;
+    onFix: (finding: any) => void;
+}) {
+    const crit = findings.filter(f => f.severity === 'critical').length;
+    const high = findings.filter(f => f.severity === 'high').length;
+    const med = findings.filter(f => f.severity === 'medium').length;
+    const low = findings.filter(f => f.severity === 'low').length;
+
+    // A simple score calculation
+    const riskPenalty = crit * 25 + high * 15 + med * 5 + low;
+    const score = Math.max(0, 100 - riskPenalty);
+
+    return (
+        <div className="h-full flex flex-col bg-[#0e1019] text-[13px] border-l border-[#1e2030] overflow-hidden w-80 shrink-0">
+            <div className="flex flex-col gap-3 px-4 py-3 border-b border-[#1e2030]">
+                <div className="flex items-center gap-2">
+                    <Shield size={16} className="text-[#B6FF2E]" />
+                    <span className="font-semibold text-white tracking-wide">Security Copilot</span>
+                </div>
+                {scanning && (
+                    <div className="flex items-center gap-2 text-[#888] text-xs">
+                        <Loader2 size={12} className="animate-spin" /> Analyzing codebase purely for security...
+                    </div>
+                )}
+                {!scanning && findings.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="text-[#888]">Security Score</span>
+                            <span className={`font-bold ${score < 50 ? 'text-[#ff6b6b]' : score < 80 ? 'text-[#ffd93d]' : 'text-[#B6FF2E]'}`}>
+                                {score}/100
+                            </span>
+                        </div>
+                        <div className="flex gap-1 text-[10px] font-mono tracking-wider">
+                            {crit > 0 && <span className="bg-[#ff6b6b]/20 text-[#ff6b6b] px-1.5 py-0.5 rounded">{crit} CRIT</span>}
+                            {high > 0 && <span className="bg-[#ff6b6b]/20 text-[#ff6b6b] px-1.5 py-0.5 rounded">{high} HIGH</span>}
+                            {med > 0 && <span className="bg-[#ffd93d]/20 text-[#ffd93d] px-1.5 py-0.5 rounded">{med} MED</span>}
+                            {low > 0 && <span className="bg-[#5cb3ff]/20 text-[#5cb3ff] px-1.5 py-0.5 rounded">{low} LOW</span>}
+                        </div>
+                    </div>
+                )}
+                {!scanning && findings.length === 0 && (
+                    <div className="text-xs text-[#888]">No vulnerabilities detected.</div>
+                )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-3">
+                {findings.map((f, i) => (
+                    <div key={i} className="bg-[#12141f] border border-[#1e2030] rounded-lg p-3 hover:border-[#B6FF2E]/30 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${
+                                    f.severity === 'critical' || f.severity === 'high' ? 'bg-[#ff6b6b]' : 
+                                    f.severity === 'medium' ? 'bg-[#ffd93d]' : 
+                                    f.severity === 'low' ? 'bg-[#5cb3ff]' : 'bg-[#888]'
+                                }`} />
+                                <span className="font-semibold text-white text-xs">{f.title}</span>
+                            </div>
+                        </div>
+                        
+                        <div className="text-[#888] text-[11px] font-mono mb-2 cursor-pointer hover:text-[#B6FF2E] transition-colors"
+                             onClick={() => onNavigate(f.endpoint, f.line)}>
+                            {f.endpoint} {f.line ? `(Line ${f.line}${f.endLine && f.endLine > f.line ? `-${f.endLine}` : ''})` : ''}
+                        </div>
+
+                        {f.description && (
+                            <div className="text-[#ccc] text-xs mb-2 leading-relaxed">
+                                <strong className="text-[#fff]">Problem:</strong> {f.description}
+                            </div>
+                        )}
+                        {f.risk && (
+                            <div className="text-[#ccc] text-xs mb-2 leading-relaxed">
+                                <strong className="text-[#ff6b6b]">Risk:</strong> {f.risk}
+                            </div>
+                        )}
+                        {f.remediation && (
+                            <div className="text-[#ccc] text-xs mb-2 leading-relaxed">
+                                <strong className="text-[#B6FF2E]">Secure Alternative:</strong> {f.remediation}
+                            </div>
+                        )}
+                        
+                        {f.fixSnippet && (
+                            <>
+                                <SnippetBlock snippet={f.fixSnippet} endpoint={f.endpoint || ''} />
+                                <button 
+                                    onClick={() => onFix(f)}
+                                    className="w-full text-center py-1.5 bg-[#B6FF2E]/10 border border-[#B6FF2E]/20 text-[#B6FF2E] hover:bg-[#B6FF2E]/30 rounded text-xs font-semibold transition-colors mt-2 text-shadow-glow">
+                                    ✨ Apply Secure Fix
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ))}
+>>>>>>> main
             </div>
         </div>
     );
@@ -231,6 +380,7 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
     const [openTabs, setOpenTabs] = useState<{ path: string; node: FSNode }[]>([]);
     const [activeTab, setActiveTab] = useState('');
     const [sidebarOpen, setSidebarOpen] = useState(true);
+<<<<<<< HEAD
     const [terminalOpen, setTerminalOpen] = useState(true);
     const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
     const [scanning, setScanning] = useState(false);
@@ -242,6 +392,182 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
     const [terminalInput, setTerminalInput] = useState('');
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+=======
+    const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
+    const [scanning, setScanning] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const [scanFindings, setScanFindings] = useState<any[]>([]);
+    const [terminalLogs, setTerminalLogs] = useState<{ msg: string; type: 'info' | 'error' | 'success' }[]>([
+        { msg: 'Welcome to Darkmatter Security IDE v2.5', type: 'info' },
+        { msg: 'System ready. Upload files to begin analysis.', type: 'info' }
+    ]);
+    const [terminalOpen, setTerminalOpen] = useState(true);
+    const [monacoLoaded, setMonacoLoaded] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const editorRef = useRef<any>(null);
+    const monacoRef = useRef<any>(null);
+    const terminalEndRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll terminal
+    useEffect(() => {
+        if (terminalEndRef.current) {
+            terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [terminalLogs]);
+
+    const scanFindingsRef = useRef<any[]>([]);
+    useEffect(() => { scanFindingsRef.current = scanFindings; }, [scanFindings]);
+    const activeTabRef = useRef<string>('');
+    useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+    // Apply exact fix when CodeLens is clicked
+    useEffect(() => {
+        window.__darkmatterApplyFixCallback = (finding: any) => {
+            if (editorRef.current && monacoRef.current) {
+                const model = editorRef.current.getModel();
+                const endL = finding.endLine || finding.line;
+                const origContent = model.getLineContent(finding.line) || '';
+                const match = origContent.match(/^\s*/);
+                const indent = match ? match[0] : '';
+                
+                let replacement = finding.fixSnippet;
+                // Basic auto-formatting: if the AI forgot to indent the first line, we add it back.
+                if (indent && !replacement.startsWith(indent)) {
+                    replacement = replacement.split('\n').map((l: string, i: number) => i === 0 || l.trim() === '' ? l : indent + l.trimStart()).join('\n');
+                    if (!replacement.startsWith(indent)) replacement = indent + replacement;
+                }
+
+                editorRef.current.executeEdits('darkmatter', [{
+                    range: new monacoRef.current.Range(finding.line, 1, endL, model.getLineMaxColumn(endL) || 1000),
+                    text: replacement,
+                    forceMoveMarkers: true
+                }]);
+                setScanFindings(prev => prev.filter(f => f.title !== finding.title || f.line !== finding.line));
+            }
+        };
+    }, []);
+
+    // Register Code Providers for inline IDE magic (Antigravity/Cursor style)
+    useEffect(() => {
+        if (!monacoLoaded || !monacoRef.current) return;
+        const monaco = monacoRef.current;
+
+        const actionProvider = monaco.languages.registerCodeActionProvider('*', {
+            provideCodeActions: (model: any, range: any, context: any, token: any) => {
+                const getPathName = (p: string) => p.split(':')[0].replace(/\\/g, '/').split('/').pop() || '';
+                const activeName = activeTabRef.current.replace(/\\/g, '/').split('/').pop() || '';
+                const findings = scanFindingsRef.current.filter(f => f.endpoint && activeName === getPathName(f.endpoint) && f.line && f.fixSnippet);
+                const actions = [];
+                for (const f of findings) {
+                    const endL = f.endLine || f.line;
+                    if (range.startLineNumber <= endL && range.endLineNumber >= f.line) {
+                        
+                        const origContent = model.getLineContent(f.line) || '';
+                        const match = origContent.match(/^\s*/);
+                        const indent = match ? match[0] : '';
+                        let replacement = f.fixSnippet;
+                        if (indent && !replacement.startsWith(indent)) {
+                            replacement = replacement.split('\n').map((l: string, i: number) => i === 0 || l.trim() === '' ? l : indent + l.trimStart()).join('\n');
+                            if (!replacement.startsWith(indent)) replacement = indent + replacement;
+                        }
+
+                        actions.push({
+                            title: '⚡ AI Fix (Replace Vulnerability)',
+                            diagnostics: context.markers.filter((m: any) => m.startLineNumber >= f.line && m.endLineNumber <= endL),
+                            kind: 'quickfix',
+                            edit: {
+                                edits: [{
+                                    resource: model.uri,
+                                    textEdit: {
+                                        range: new monaco.Range(f.line, 1, endL, model.getLineMaxColumn(endL) || 1000),
+                                        text: replacement
+                                    },
+                                    versionId: undefined
+                                }]
+                            },
+                            isPreferred: true
+                        });
+                        
+                        // Also add an explicit command version
+                        actions.push({
+                            title: '✨ Apply Recommendation inline',
+                            command: {
+                                id: 'darkmatter.applyCodeLensFix',
+                                title: 'Apply Fix',
+                                arguments: [f]
+                            },
+                            kind: 'refactor'
+                        });
+                    }
+                }
+                return { actions, dispose: () => {} };
+            }
+        });
+
+        const lensProvider = monaco.languages.registerCodeLensProvider('*', {
+            provideCodeLenses: function (model: any, token: any) {
+                const getPathName = (p: string) => p.split(':')[0].replace(/\\/g, '/').split('/').pop() || '';
+                const activeName = activeTabRef.current.replace(/\\/g, '/').split('/').pop() || '';
+                const findings = scanFindingsRef.current.filter(f => f.endpoint && activeName === getPathName(f.endpoint) && f.line && f.fixSnippet);
+                const lenses = findings.map(f => ({
+                    range: new monaco.Range(f.line, 1, f.line, 1),
+                    id: 'lens-' + f.line + '-' + f.title,
+                    command: {
+                        id: 'darkmatter.applyCodeLensFix',
+                        title: '✨ Fix Vulnerability: ' + f.title,
+                        arguments: [f]
+                    }
+                }));
+                return { lenses, dispose: () => {} };
+            },
+            resolveCodeLens: function (model: any, codeLens: any, token: any) {
+                return codeLens;
+            }
+        });
+
+        if (!window.__darkmatterCodeLensRegistered) {
+            window.__darkmatterCodeLensRegistered = true;
+            monaco.editor.registerCommand('darkmatter.applyCodeLensFix', (accessor: any, ...args: any[]) => {
+                if (window.__darkmatterApplyFixCallback) {
+                    window.__darkmatterApplyFixCallback(args[0]);
+                }
+            });
+        }
+
+        return () => {
+            actionProvider.dispose();
+            lensProvider.dispose();
+        };
+    }, [monacoLoaded, scanFindings, activeTab]);
+
+    // Decorate code editor with vulnerabilities
+    useEffect(() => {
+        if (!editorRef.current || !monacoRef.current || !activeTab) return;
+        const currentModel = editorRef.current.getModel();
+        if (!currentModel) return;
+
+        const getPathName = (p: string) => p.split(':')[0].replace(/\\/g, '/').split('/').pop() || '';
+        const activeName = activeTab.replace(/\\/g, '/').split('/').pop() || '';
+        const activeFindings = scanFindings.filter(f => f.endpoint && activeName === getPathName(f.endpoint) && f.line);
+        const markers = activeFindings.map(f => {
+            const sev = f.severity === 'critical' || f.severity === 'high'  
+                ? monacoRef.current.MarkerSeverity.Error 
+                : f.severity === 'medium' 
+                    ? monacoRef.current.MarkerSeverity.Warning 
+                    : monacoRef.current.MarkerSeverity.Info;
+            return {
+                message: `🛡️ Security Vulnerability: ${f.title}\nSeverity: ${f.severity.toUpperCase()}\n\n${f.description || ''}\n\nRecommendation: ${f.remediation || ''}`,
+                severity: sev,
+                startLineNumber: f.line,
+                startColumn: 1,
+                endLineNumber: f.endLine || f.line,
+                endColumn: 1000,
+            };
+        });
+
+        monacoRef.current.editor.setModelMarkers(currentModel, 'darkmatter', markers);
+    }, [scanFindings, activeTab]);
+>>>>>>> main
 
     // Open default file
     useEffect(() => {
@@ -271,6 +597,30 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
 
     const activeNode = openTabs.find(t => t.path === activeTab)?.node;
 
+<<<<<<< HEAD
+=======
+    // ─── Navigation via Panel ────────────────────────────────
+    const navigateToVulnerability = (endpoint: string, line?: number) => {
+        const path = endpoint.split(':')[0].replace(/\\/g, '/').split('/').pop() || '';
+        const allFiles = flattenFiles(fileSystem);
+        const file = allFiles.find(f => {
+            const fName = f.path.replace(/\\/g, '/').split('/').pop() || '';
+            return fName === path;
+        });
+        
+        if (file) {
+            openFile(file.path, file.node);
+            setTimeout(() => {
+                if (editorRef.current && line) {
+                    editorRef.current.revealLineInCenter(line);
+                    editorRef.current.setPosition({ lineNumber: line, column: 1 });
+                    editorRef.current.focus();
+                }
+            }, 50);
+        }
+    };
+
+>>>>>>> main
     // ─── File Upload Handler ─────────────────────────────────
     const handleFileUpload = useCallback(async (fileList: FileList) => {
         const uploadedFiles: { path: string; content: string }[] = [];
@@ -306,6 +656,7 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
             setOpenTabs(prev => [...prev, first]);
             setActiveTab(first.path);
         }
+<<<<<<< HEAD
 
         setTerminalLines(prev => [
             ...prev,
@@ -314,6 +665,8 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
             uploadedFiles.length > 10 ? `    ... and ${uploadedFiles.length - 10} more` : '',
             '',
         ].filter(Boolean));
+=======
+>>>>>>> main
     }, []);
 
     // ─── Drag and Drop ───────────────────────────────────────
@@ -336,11 +689,15 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
     const scanCode = async () => {
         const allFiles = flattenFiles(fileSystem);
         if (allFiles.length === 0) {
+<<<<<<< HEAD
             setTerminalLines(prev => [...prev, '\x1b[31m[!]\x1b[0m No files to scan. Upload files first.', '']);
+=======
+>>>>>>> main
             return;
         }
 
         setScanning(true);
+<<<<<<< HEAD
         setTerminalOpen(true);
         setTerminalLines(prev => [
             ...prev,
@@ -349,6 +706,9 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
             `\x1b[32m[*]\x1b[0m Analyzing ${allFiles.length} files with Gemini AI`,
             '',
         ]);
+=======
+        setScanFindings([]);
+>>>>>>> main
 
         try {
             const response = await fetch('/api/scan/code', {
@@ -384,6 +744,7 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                             const data = JSON.parse(line.slice(6));
 
                             if (data.type === 'progress') {
+<<<<<<< HEAD
                                 setTerminalLines(prev => [...prev, `\x1b[33m[▸]\x1b[0m ${data.message}`]);
                             } else if (data.type === 'complete') {
                                 const findings = data.findings || [];
@@ -429,22 +790,36 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                                 });
                             } else if (data.type === 'error') {
                                 setTerminalLines(prev => [...prev, `\x1b[31m[!]\x1b[0m ${data.message}`, '']);
+=======
+                                setTerminalLogs(prev => [...prev, { msg: `> ${data.message}`, type: 'info' }]);
+                            } else if (data.type === 'result') {
+                                setScanFindings(data.findings || []);
+                                setTerminalLogs(prev => [...prev, { msg: `✓ Scan Successful: Found ${data.totalFindings} vulnerabilities.`, type: 'success' }]);
+                            } else if (data.type === 'error') {
+                                setTerminalLogs(prev => [...prev, { msg: `⨯ ${data.message}`, type: 'error' }]);
+>>>>>>> main
                             }
                         } catch { /* skip unparseable */ }
                     }
                 }
             }
         } catch (err) {
+<<<<<<< HEAD
             setTerminalLines(prev => [
                 ...prev,
                 `\x1b[31m[!]\x1b[0m Scan error: ${err instanceof Error ? err.message : 'Unknown error'}`,
                 '',
             ]);
+=======
+            const msg = err instanceof Error ? err.message : 'Unknown scan error';
+            setTerminalLogs(prev => [...prev, { msg: `⨯ ${msg}`, type: 'error' }]);
+>>>>>>> main
         } finally {
             setScanning(false);
         }
     };
 
+<<<<<<< HEAD
     // ─── Terminal command handler ─────────────────────────────
     const handleTerminalSubmit = () => {
         if (!terminalInput.trim()) return;
@@ -475,6 +850,8 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
         setTerminalInput('');
     };
 
+=======
+>>>>>>> main
     return (
         <div className="fixed inset-0 z-[200] bg-[#12141f] flex flex-col text-[#ccc]" style={{ fontFamily: "'IBM Plex Mono', 'Consolas', monospace" }}>
             {/* Title Bar */}
@@ -621,6 +998,24 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                                 theme="vs-dark"
                                 language={activeNode.language || 'plaintext'}
                                 value={activeNode.content || ''}
+<<<<<<< HEAD
+=======
+                                onMount={(editor, monaco) => {
+                                    editorRef.current = editor;
+                                    monacoRef.current = monaco;
+                                    setMonacoLoaded(true);
+                                    
+                                    // Disable native TS/JS syntax validation so it doesn't clash with our security markers (no "rain of red")
+                                    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+                                        noSemanticValidation: true,
+                                        noSyntaxValidation: true
+                                    });
+                                    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+                                        noSemanticValidation: true,
+                                        noSyntaxValidation: true
+                                    });
+                                }}
+>>>>>>> main
                                 options={{
                                     fontSize: 14,
                                     fontFamily: "'IBM Plex Mono', Consolas, monospace",
@@ -649,6 +1044,7 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                             </div>
                         )}
                     </div>
+<<<<<<< HEAD
 
                     {/* Terminal */}
                     {terminalOpen && (
@@ -659,17 +1055,62 @@ export default function WebIDE({ onBack }: { onBack?: () => void } = {}) {
                 </div>
             </div>
 
+=======
+                </div>
+
+                {/* Security Copilot Right Panel */}
+                <SecurityPanel 
+                    findings={scanFindings} 
+                    scanning={scanning} 
+                    onNavigate={navigateToVulnerability} 
+                    onFix={(f) => window.__darkmatterApplyFixCallback && window.__darkmatterApplyFixCallback(f)} 
+                />
+            </div>
+
+            {/* Bottom Terminal */}
+            {terminalOpen && (
+                <div className="h-40 bg-[#0a0c14] border-t border-[#1e2030] flex flex-col shrink-0 font-mono">
+                    <div className="flex items-center justify-between px-3 py-1 bg-[#12141f] border-b border-[#1e2030] text-[10px] text-[#888] tracking-widest uppercase">
+                        <span>Terminal — Security Agent Output</span>
+                        <button onClick={() => setTerminalOpen(false)} className="hover:text-white transition-colors">
+                            <X size={12} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 text-[12px] space-y-1">
+                        {terminalLogs.map((log, i) => (
+                            <div key={i} className={`${
+                                log.type === 'error' ? 'text-[#ff6b6b]' : 
+                                log.type === 'success' ? 'text-[#B6FF2E]' : 'text-[#888]'
+                            }`}>
+                                {log.msg}
+                            </div>
+                        ))}
+                        <div ref={terminalEndRef} />
+                    </div>
+                </div>
+            )}
+
+>>>>>>> main
             {/* Status Bar */}
             <div className="h-6 bg-[#0a0c14] border-t border-[#1e2030] flex items-center px-3 text-[11px] shrink-0 select-none">
                 <div className="flex items-center gap-4 text-[#888]">
                     <span className="flex items-center gap-1"><GitBranch size={12} /> main</span>
                     <span className="flex items-center gap-1"><CheckCircle size={12} className="text-[#28c840]" /> {flattenFiles(fileSystem).length} files</span>
+<<<<<<< HEAD
                     <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setTerminalOpen(!terminalOpen)}>
                         <TerminalIcon size={12} /> Terminal
                     </span>
                     <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setSidebarOpen(!sidebarOpen)}>
                         <PanelLeft size={12} /> Sidebar
                     </span>
+=======
+                    <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                        <PanelLeft size={12} /> Sidebar
+                    </span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:text-white" onClick={() => setTerminalOpen(!terminalOpen)}>
+                        <TerminalIcon size={12} /> Terminal
+                    </span>
+>>>>>>> main
                 </div>
                 <div className="flex-1" />
                 <div className="flex items-center gap-4 text-[#888]">

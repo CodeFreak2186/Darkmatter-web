@@ -2,7 +2,7 @@
 // Regex-based quick scan + Gemini AI deep analysis
 
 import { Finding, Severity } from './types';
-import { analyzeCodeWithGrok } from './grok-client';
+import { analyzeProjectWithGrok } from './grok-client';
 
 interface CodeFile {
     path: string;
@@ -257,6 +257,7 @@ function regexScanFile(file: CodeFile): Finding[] {
                 remediation: pattern.remediation,
                 evidence: lineContent.substring(0, 200),
                 cwe: pattern.cwe,
+                line: lineNumber,
             });
 
             // Prevent infinite loops with zero-length matches
@@ -279,14 +280,16 @@ export async function scanCode(
     const allFindings: Finding[] = [];
 
     // Phase 1: Regex-based quick scan
-    onProgress?.('Running pattern-based security scan...');
+    if (!useAI) {
+        onProgress?.('Running pattern-based security scan...');
 
-    for (const file of files) {
-        const fileFindings = regexScanFile(file);
-        allFindings.push(...fileFindings);
+        for (const file of files) {
+            const fileFindings = regexScanFile(file);
+            allFindings.push(...fileFindings);
+        }
+
+        onProgress?.(`Pattern scan complete. Found ${allFindings.length} issues.`);
     }
-
-    onProgress?.(`Pattern scan complete. Found ${allFindings.length} issues.`);
 
     // Phase 2: Gemini AI deep analysis
     if (useAI) {
@@ -296,21 +299,25 @@ export async function scanCode(
             // Filter to scannable files (skip very large or binary-like files)
             const scannableFiles = files.filter(f => {
                 if (f.content.length > 50000) return false;
+                
+                // Ignore library, build, and hidden directories
+                const lowerPath = f.path.toLowerCase();
+                const ignoredDirs = ['node_modules/', 'venv/', 'env/', '.next/', '.git/', 'dist/', 'build/', '__pycache__/', '.next/'];
+                if (ignoredDirs.some(dir => lowerPath.includes(dir) || lowerPath.startsWith(dir))) {
+                    return false;
+                }
+
                 const ext = f.path.split('.').pop()?.toLowerCase() || '';
                 const codeExts = ['py', 'js', 'ts', 'tsx', 'jsx', 'java', 'go', 'rb', 'php', 'cs', 'c', 'cpp', 'rs', 'yaml', 'yml', 'json', 'xml', 'html', 'css', 'env', 'sh', 'bash', 'sql', 'tf', 'hcl'];
                 return codeExts.includes(ext) || !ext;
             });
 
             if (scannableFiles.length > 0) {
-                const grokAnalysis = await analyzeCodeWithGrok(scannableFiles);
+                const grokAnalysis = await analyzeProjectWithGrok(scannableFiles);
 
-                // Merge (deduplicate by title + endpoint)
-                const existingKeys = new Set(allFindings.map(f => `${f.title.toLowerCase()}|${f.endpoint.toLowerCase()}`));
+                // Add all AI findings
                 for (const grokFinding of grokAnalysis.findings) {
-                    const key = `${grokFinding.title.toLowerCase()}|${grokFinding.endpoint.toLowerCase()}`;
-                    if (!existingKeys.has(key)) {
-                        allFindings.push({ ...grokFinding, id: 0 });
-                    }
+                    allFindings.push({ ...grokFinding, id: 0 });
                 }
 
                 onProgress?.(`AI analysis complete. Total: ${allFindings.length} findings.`);

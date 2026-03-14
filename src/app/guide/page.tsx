@@ -36,7 +36,11 @@ export default function GuidePage() {
       <div className="grain-overlay pointer-events-none fixed inset-0 z-[100] opacity-20 mix-blend-overlay" />
       
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-20">
+<<<<<<< HEAD
         <Link href="/" className="inline-flex items-center gap-2 text-[#A7ACBF] hover:text-[#B6FF2E] transition-colors mb-16">
+=======
+        <Link href="/" className="inline-flex items-center gap-2 text-[#A7ACBF] hover:text-[#B6FF2E] transition-all mb-16 px-4 py-2 border border-white/10 rounded-lg bg-[#0A0D14]/50 backdrop-blur-md hover:border-[#B6FF2E]/30 hover:bg-[#B6FF2E]/5">
+>>>>>>> main
           <ArrowLeft size={16} /> Back to Home
         </Link>
         

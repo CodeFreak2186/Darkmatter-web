@@ -1,0 +1,19 @@
+2026-03-13 19:36:14,736 - darkmatter_audit - INFO - JOB:5b61abf5-070f-436c-8698-daf78bcff156 | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:36:59,890 - darkmatter_audit - INFO - JOB:5b61abf5-070f-436c-8698-daf78bcff156 | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:39:51,750 - darkmatter_audit - INFO - JOB:e5d007d5-6f39-4e63-ab3c-9f400c37b7c9 | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:40:00,022 - darkmatter_audit - INFO - JOB:2ab6d818-fcc9-4a58-b19e-2154056e40cb | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:40:46,204 - darkmatter_audit - INFO - JOB:2ab6d818-fcc9-4a58-b19e-2154056e40cb | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:42:46,927 - darkmatter_audit - INFO - JOB:5ced3a3c-2393-4ddb-b89f-89b71031da2e | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:43:24,190 - darkmatter_audit - INFO - JOB:5ced3a3c-2393-4ddb-b89f-89b71031da2e | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:43:33,996 - darkmatter_audit - INFO - JOB:374ba8ea-530e-4d88-a1f6-472ea788ad5f | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:44:05,640 - darkmatter_audit - INFO - JOB:374ba8ea-530e-4d88-a1f6-472ea788ad5f | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:44:06,786 - darkmatter_audit - INFO - JOB:bea5b449-38bf-4eb4-b1bd-770612f8d38c | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:47:03,544 - darkmatter_audit - INFO - JOB:15efd65a-5c45-4491-8575-b0007b30e95f | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "agent", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:47:37,504 - darkmatter_audit - INFO - JOB:15efd65a-5c45-4491-8575-b0007b30e95f | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:49:32,054 - darkmatter_audit - INFO - JOB:414e443a-c6fc-4ec6-8ddc-98f5e372ebc2 | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "scan", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:50:04,762 - darkmatter_audit - INFO - JOB:414e443a-c6fc-4ec6-8ddc-98f5e372ebc2 | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:50:05,830 - darkmatter_audit - INFO - JOB:0e9370de-ed7e-42bd-9512-040439f8d809 | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "scan", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:50:38,811 - darkmatter_audit - INFO - JOB:0e9370de-ed7e-42bd-9512-040439f8d809 | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
+2026-03-13 19:50:40,280 - darkmatter_audit - INFO - JOB:a842d4b8-7729-4bc8-b50b-babe85049082 | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "scan", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:52:44,196 - darkmatter_audit - INFO - JOB:7539ac2a-d4f0-44eb-aa41-4a5c391ffd8a | ACTION:start_scan | DETAILS:{"target": "https://juice-shop.herokuapp.com/#/", "mode": "scan", "profile": "full", "ip": "127.0.0.1"}
+2026-03-13 19:53:17,916 - darkmatter_audit - INFO - JOB:7539ac2a-d4f0-44eb-aa41-4a5c391ffd8a | ACTION:scan_error | DETAILS:{"error": "'Detection' object has no attribute 'request'"}
