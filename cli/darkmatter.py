@@ -20,6 +20,7 @@ import argparse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+import asyncio
 
 # Force UTF-8 on Windows terminal to prevent rich unicode crash
 if sys.stdout.encoding.lower() != "utf-8" and hasattr(sys.stdout, "reconfigure"):
@@ -863,7 +864,6 @@ Examples:
     if args.command == "vm":
         tracker.track_action("vm", "e2b_remote", {"command": args.tool_cmd})
         from core.e2b_sandbox import DarkmatterSandbox
-        import asyncio
 
         print_banner()
         console.rule("[bold cyan]E2B REMOTE SANDBOX", style="cyan")
@@ -931,12 +931,10 @@ Examples:
                     else:
                         console.print("  [bold red][!] Signature NOT found or mismatch. Access denied.[/]")
                         console.print("  [bold red][!] Aborting scan due to verification failure.[/]")
-                        import sys
                         sys.exit(1)
                 except Exception:
                     console.print("  [bold red][!] Network error during verification.[/]")
                     console.print("  [bold red][!] Aborting scan due to connectivity issues during verification.[/]")
-                    import sys
                     sys.exit(1)
             else:
                 console.print("  [cyan][*][/] Verification Bypassed. Initiating Full Protocol Under Responsibility Waiver.")
@@ -952,12 +950,10 @@ Examples:
     if args.command == "agent":
         tracker.track_action("agent", args.target, {"goal": args.goal})
         agent = RedTeamAgent(api_key=API_KEY)
-        import asyncio
         asyncio.run(agent.execute_mission(args.goal, args.target))
     elif args.command == "scan":
         target = ensure_http(args.target)
         tracker.track_action("scan", target, {"profile": args.profile, "mode": args.mode})
-        import asyncio
         asyncio.run(run_scan(target, args.profile, args.mode))
     elif args.command == "fuzz":
         target = ensure_http(args.target)
