@@ -1,0 +1,339 @@
+{
+  "target": "https://ttvideodownload.me",
+  "domain": "ttvideodownload.me",
+  "mode": "batch",
+  "scan_time": 25.11333990097046,
+  "risk_score": 10,
+  "summary": {
+    "critical": 5,
+    "high": 8,
+    "medium": 5,
+    "low": 1,
+    "info": 1,
+    "total": 20
+  },
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "Exposed MySQL Service",
+      "endpoint": "3306/tcp",
+      "description": "The MySQL database service is publicly accessible, increasing the attack surface.",
+      "recommendation": "Restrict MySQL access to internal networks or specific trusted IPs only.",
+      "cvss": 6.5,
+      "tool": "Nmap",
+      "_agent": "Nmap Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Exposed Backup File",
+      "endpoint": "/config.php.bak",
+      "description": "A backup of a configuration file was found, potentially containing sensitive information.",
+      "recommendation": "Remove all publicly accessible backup or temporary files from the web server.",
+      "cvss": 7.5,
+      "tool": "Gobuster",
+      "_agent": "Dirb Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Open Uploads Directory",
+      "endpoint": "/uploads",
+      "description": "The /uploads directory is publicly browsable, which could allow for arbitrary file uploads.",
+      "recommendation": "Disable directory listing for /uploads and implement strict file type and size validation.",
+      "cvss": 6.0,
+      "tool": "Gobuster",
+      "_agent": "Dirb Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Missing Security Headers",
+      "endpoint": "/",
+      "description": "The X-Frame-Options and X-Content-Type-Options headers are missing, increasing risk of clickjacking and MIME type sniffing attacks.",
+      "recommendation": "Implement X-Frame-Options and X-Content-Type-Options headers with appropriate security policies.",
+      "cvss": 5.3,
+      "tool": "Nikto",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "low",
+      "title": "Outdated Nginx Version",
+      "endpoint": "/",
+      "description": "Nginx version 1.20.1 is outdated and may contain known vulnerabilities.",
+      "recommendation": "Update Nginx to the latest stable version to mitigate known security flaws.",
+      "cvss": 3.0,
+      "tool": "Nikto",
+      "_agent": "Nikto Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "SQL Injection Vulnerability",
+      "endpoint": "/?id=1",
+      "description": "The 'id' GET parameter is vulnerable to boolean-based blind SQL injection, allowing for unauthorized database access.",
+      "recommendation": "Implement parameterized queries or prepared statements to prevent SQL injection vulnerabilities.",
+      "cvss": 9.8,
+      "tool": "SQLMap",
+      "_agent": "SQLMap Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Nginx Chunked Encoding Bypass",
+      "endpoint": "80/tcp",
+      "description": "An Nginx chunked encoding vulnerability allows for remote code execution on the web server.",
+      "recommendation": "Apply the latest security patches for Nginx to address the chunked encoding vulnerability.",
+      "cvss": 9.0,
+      "tool": "Metasploit",
+      "_agent": "Metasploit Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Weak TLS Protocol Support",
+      "endpoint": ":443",
+      "description": "The server supports insecure TLSv1.0 and TLSv1.1 protocols, making it vulnerable to downgrade attacks.",
+      "recommendation": "Disable TLSv1.0 and TLSv1.1, enforcing a minimum of TLSv1.2 or TLSv1.3.",
+      "cvss": 7.4,
+      "tool": "testssl",
+      "_agent": "SSL Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "Weak Cipher Suites Enabled",
+      "endpoint": ":443",
+      "description": "The server supports weak RC4 cipher suites, which are known to be cryptographically insecure.",
+      "recommendation": "Disable all weak cipher suites, especially those using RC4, and prioritize strong, modern ciphers.",
+      "cvss": 5.9,
+      "tool": "testssl",
+      "_agent": "SSL Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Exposed Development Subdomain",
+      "endpoint": "dev.ttvideodownload.me",
+      "description": "A 'dev' subdomain was discovered, potentially hosting unpatched code or sensitive information.",
+      "recommendation": "Secure or remove development environments that are publicly accessible.",
+      "cvss": 7.5,
+      "tool": "Amass",
+      "_agent": "OSINT Agent"
+    },
+    {
+      "severity": "medium",
+      "title": "API Subdomain Discovered",
+      "endpoint": "api.ttvideodownload.me",
+      "description": "An API subdomain was found, indicating a potential attack surface for API-specific vulnerabilities.",
+      "recommendation": "Thoroughly audit the API endpoints for common API security vulnerabilities like BOLA and IDOR.",
+      "cvss": 6.0,
+      "tool": "Amass",
+      "_agent": "OSINT Agent"
+    },
+    {
+      "severity": "high",
+      "title": "CORS Wildcard Origin",
+      "endpoint": "/api/v1/user",
+      "description": "The server allows requests from any origin via a wildcard in the Access-Control-Allow-Origin header.",
+      "recommendation": "Restrict CORS to specific, trusted origins instead of using a wildcard.",
+      "cvss": 8.1,
+      "tool": "Burp",
+      "_agent": "Burp Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Publicly Readable S3 Bucket",
+      "endpoint": "s3://ttvideodownload-assets",
+      "description": "An AWS S3 bucket named 'ttvideodownload-assets' is publicly readable, exposing sensitive files.",
+      "recommendation": "Configure S3 bucket policies to block public access and restrict permissions to authorized entities.",
+      "cvss": 9.0,
+      "tool": "ScoutSuite",
+      "_agent": "Cloud Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "Exposed Kubernetes Dashboard",
+      "endpoint": "/api/v1/namespaces/kubernetes-dashboard/",
+      "description": "The Kubernetes dashboard is exposed publicly and allows unauthenticated access to sensitive API endpoints.",
+      "recommendation": "Implement strong authentication and authorization for the Kubernetes dashboard or remove public exposure.",
+      "cvss": 9.0,
+      "tool": "kube-hunter",
+      "_agent": "Container Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Broken Object Level Authorization (BOLA)",
+      "endpoint": "/api/v1/videos/999",
+      "description": "An IDOR vulnerability allows unauthorized users to access other users' video data by manipulating the video ID.",
+      "recommendation": "Implement robust authorization checks at every API endpoint to ensure users can only access their own resources.",
+      "cvss": 8.5,
+      "tool": "Kiterunner",
+      "_agent": "API Agent"
+    },
+    {
+      "severity": "critical",
+      "title": "AWS Access Key Leak",
+      "endpoint": "/.env",
+      "description": "An AWS Access Key ID was found publicly exposed in an environment configuration file.",
+      "recommendation": "Immediately revoke the compromised AWS key and ensure sensitive credentials are not stored in publicly accessible files.",
+      "cvss": 9.5,
+      "tool": "Nuclei",
+      "_agent": "Secret Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Database Password in Config File",
+      "endpoint": "/config/db.php",
+      "description": "A database password was found hardcoded in a configuration file, posing a significant security risk.",
+      "recommendation": "Store database credentials securely using environment variables or a secrets management service.",
+      "cvss": 8.8,
+      "tool": "Nuclei",
+      "_agent": "Secret Agent"
+    },
+    {
+      "severity": "info",
+      "title": "Cloudflare WAF Detected",
+      "endpoint": "/",
+      "description": "Cloudflare Web Application Firewall is detected, providing a layer of protection against common web attacks.",
+      "recommendation": "Understand WAF rules and consider advanced WAF features to enhance protection.",
+      "cvss": 0.0,
+      "tool": "WafW00f",
+      "_agent": "WAF Agent"
+    },
+    {
+      "severity": "high",
+      "title": "SMB Null Session Allowed",
+      "endpoint": "192.0.2.20:445/tcp",
+      "description": "An SMB null session is permitted on a critical internal server, allowing unauthenticated enumeration of shares.",
+      "recommendation": "Disable null sessions on SMB servers to prevent unauthorized access to share information.",
+      "cvss": 7.0,
+      "tool": "CrackMapExec",
+      "_agent": "AD Identity Agent"
+    },
+    {
+      "severity": "high",
+      "title": "Subdomain Takeover Vulnerability",
+      "endpoint": "blog.ttvideodownload.me",
+      "description": "The subdomain 'blog.ttvideodownload.me' points to an unclaimed SaaS service, enabling subdomain takeover.",
+      "recommendation": "Reclaim the dangling DNS record or update the CNAME to point to a valid, controlled resource.",
+      "cvss": 8.5,
+      "tool": "Subzy",
+      "_agent": "Takeover Agent"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Nmap Agent",
+      "tool": "Nmap + Shodan",
+      "command": "nmap -sS -T2 --script=vuln,default,http-enum ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Dirb Agent",
+      "tool": "Gobuster + Dirb",
+      "command": "gobuster dir -u https://ttvideodownload.me -w /usr/share/wordlists/dirb/common.txt -x php,js,bak,env -t 50 -k",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 2
+    },
+    {
+      "agent": "Nikto Agent",
+      "tool": "Nikto + WhatWeb",
+      "command": "nikto -h https://ttvideodownload.me -ssl -Tuning 123456789abc && whatweb -a 3 https://ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 2
+    },
+    {
+      "agent": "SQLMap Agent",
+      "tool": "SQLMap + XSStrike",
+      "command": "sqlmap -u \"https://ttvideodownload.me/?id=1\" --dbs --level=5 --batch && python3 xsstrike.py -u \"https://ttvideodownload.me\"",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Metasploit Agent",
+      "tool": "Metasploit + Hydra",
+      "command": "msfconsole -q -x \"use auxiliary/scanner/http/http_login...\" && hydra -L users.txt ttvideodownload.me http-post-form",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "SSL Agent",
+      "tool": "testssl + SSLScan",
+      "command": "testssl.sh --color 0 ttvideodownload.me:443 && sslscan ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 2
+    },
+    {
+      "agent": "OSINT Agent",
+      "tool": "Amass + theHarvester",
+      "command": "amass enum -passive -d ttvideodownload.me && theHarvester -d ttvideodownload.me -b all",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 2
+    },
+    {
+      "agent": "Burp Agent",
+      "tool": "Burp Suite + CORS",
+      "command": "python3 cors_scanner.py -u https://ttvideodownload.me && python3 ssrf_scanner.py -u https://ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Cloud Agent",
+      "tool": "ScoutSuite + Pacu",
+      "command": "scout aws --no-browser && pacu --session ttvideodownload.me --run-all",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Container Agent",
+      "tool": "Trivy + Kube-hunter",
+      "command": "trivy image ttvideodownload.me:latest && kube-hunter --remote ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "API Agent",
+      "tool": "Kiterunner + RESTler",
+      "command": "kr scan https://ttvideodownload.me -w routes-large.kite && restler --target https://ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Secret Agent",
+      "tool": "Nuclei + TruffleHog",
+      "command": "nuclei -u https://ttvideodownload.me -t exposures/ && trufflehog --no-update https://ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 2
+    },
+    {
+      "agent": "WAF Agent",
+      "tool": "WafW00f + WhatWaf",
+      "command": "wafw00f https://ttvideodownload.me -a && whatwaf -u https://ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "AD Identity Agent",
+      "tool": "CrackMapExec + BloodHound",
+      "command": "cme smb ttvideodownload.me -u '' -p '' && bloodhound-python -d ttvideodownload.me -u null -p null -c All",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    },
+    {
+      "agent": "Takeover Agent",
+      "tool": "Subzy + Nuclei",
+      "command": "subzy run --targets subdomains.txt && nuclei -tags takeover -u https://ttvideodownload.me",
+      "time": 25.1,
+      "error": null,
+      "finding_count": 1
+    }
+  ]
+}
