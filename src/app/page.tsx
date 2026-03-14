@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useLayoutEffect } from 'react';
+import { useRef, useLayoutEffect, useState, useEffect } from 'react';
 import { Shield, Zap, Eye, Cpu, Lock, Code, FileText, Globe, Menu, Send, Mail, Twitter, Github, Linkedin, Activity, AlertTriangle, CheckCircle, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import SmoothScroll from '@/components/SmoothScroll';
@@ -31,23 +31,54 @@ function useGsapPin(sectionRef: React.RefObject<HTMLElement | null>, bgRef: Reac
 
 function Navigation() {
   const navRef = useRef<HTMLElement>(null);
+  const [user, setUser] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUser(localStorage.getItem('logged_in_user'));
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('logged_in_user');
+    setUser(null);
+  };
+
   useLayoutEffect(() => {
     const h = () => { if (navRef.current) { if (window.scrollY > 100) { navRef.current.classList.add('bg-[#07080B]/90', 'backdrop-blur-md'); navRef.current.classList.remove('bg-transparent'); } else { navRef.current.classList.remove('bg-[#07080B]/90', 'backdrop-blur-md'); navRef.current.classList.add('bg-transparent'); } } };
     window.addEventListener('scroll', h, { passive: true }); return () => window.removeEventListener('scroll', h);
   }, []);
+
   const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+
   return (
     <nav ref={navRef} className="fixed top-0 left-0 right-0 z-[100] transition-all duration-500 bg-transparent">
       <div className="flex items-center justify-between px-6 lg:px-12 py-5">
-        <div className="font-display font-bold text-xl tracking-tight text-[#F4F6FF]">Darkmatter</div>
-        <div className="hidden lg:flex items-center gap-10">
-          <Link href="/about" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">About</Link>
-          <Link href="/guide" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">Guide</Link>
+        <div className="flex items-center gap-10">
+          <Link href="/" className="font-display font-bold text-xl tracking-tight text-[#F4F6FF]">Darkmatter</Link>
+          <div className="hidden lg:flex items-center gap-8">
+            <Link href="/about" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">About</Link>
+            <Link href="/guide" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">Guide</Link>
+            <a href="/darkmatter-extension.zip" download className="text-sm text-[#B6FF2E] hover:text-white transition-colors font-medium">Download Plugin</a>
+          </div>
         </div>
         <div className="hidden lg:flex items-center gap-3">
           <Link href="/dashboard" className="px-4 py-2.5 border border-[#ff9f43]/80 text-[#ff9f43] text-sm font-semibold hover:bg-[#ff9f43]/10 transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-1.5"><Activity size={15} /> Dashboard</Link>
           <Link href="/terminal" className="px-4 py-2.5 border border-[#4af626]/80 text-[#4af626] text-sm font-semibold hover:bg-[#4af626]/10 transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-1.5"><Terminal size={15} /> Terminal</Link>
-          <Link href="/ide" className="px-4 py-2.5 bg-[#B6FF2E] text-[#07080B] text-sm font-semibold hover:bg-[#a8ee20] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-1.5"><Code size={15} /> Web IDE</Link>
+          <Link href="/ide" className="px-4 py-2.5 bg-[#B6FF2E] text-[#07080B] text-sm font-semibold hover:bg-[#a8ee20] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-1.5 mr-2"><Code size={15} /> Web IDE</Link>
+          
+          {user ? (
+            <div className="flex items-center gap-2 pl-4 border-l border-white/10">
+              <div className="w-8 h-8 rounded-full bg-[#B6FF2E]/20 border border-[#B6FF2E]/50 flex items-center justify-center text-[#B6FF2E] font-bold text-sm">
+                {user.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-[#F4F6FF] text-sm font-medium">{user}</span>
+              <button onClick={handleLogout} className="ml-2 text-xs text-[#A7ACBF] hover:text-[#ff4040] transition-colors">Logout</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+              <Link href="/login" className="text-sm text-[#A7ACBF] hover:text-[#F4F6FF] transition-colors font-medium">Login</Link>
+              <Link href="/signup" className="px-4 py-2 bg-white/5 border border-white/10 text-[#F4F6FF] text-sm font-semibold hover:bg-white/10 transition-all duration-300 rounded hover:-translate-y-0.5">Sign up</Link>
+            </div>
+          )}
         </div>
         <button className="lg:hidden text-[#F4F6FF]"><Menu size={24} /></button>
       </div>
